@@ -312,7 +312,7 @@ summary(aov(TARGET_WINS~TEAM_PITCHING_H, data = train_imputed))
 
 + While we would expect negative coefficients for Fielding Errors, Walks Allowed & Batting Strikeouts, we wouldn't expect negative values for Double Plays & Batting Doubles. Additionally, it's surprising that Caught Stealing & Home Runs Allowed do not have negative coefficients. While none of the variables are perfectly co-linear and were automatically removed from the model, these unexpected sign may indicate that we have some.
 
-+ At 0.3635, the adjusted $R^2$ is not as high as we would prefer, and it indicates that only 36% of the variance in the response variable can be explained by the predictor variables.
++ At 0.3588, the adjusted $R^2$ is not as high as we would prefer, and it indicates that only 36% of the variance in the response variable can be explained by the predictor variables.
 
 + At 76, the F-statistic is large, and the model's p-value is near zero. If the model's diagnostics are sufficient, these values indicate that we would reject the null hypothesis that there is no relationship between the explanatory & response variables.
 
@@ -336,7 +336,7 @@ In the Model #2 output above, we notice the following:
 
 + We would expect a negative coefficient for Walks Allowed and positive ones for Batting Walks & Batting Hits. However, 1 of the 4 Hits Allowed dummy variables does not have a negative coefficient, and this unexpected coefficient sign may indicate that we still have some collinearity.
 
-+ At 0.2275, the adjusted $R^2$ indicates that this model explains less of variance in the response variable than Model #1.
++ At 0.2251, the adjusted $R^2$ indicates that this model explains less of variance in the response variable than Model #1.
 
 + At 95, the F-statistic is larger than model #1, and the model's p-value is near zero. If the model's diagnostics are sufficient, these values indicate that we would reject the null hypothesis that there is no relationship between the explanatory & response variables.
 
@@ -344,11 +344,11 @@ In the Model #2 output above, we notice the following:
 
 + Let's start with Model #1, but let's remove the 4 variables that appeared to have multicollinearity issues because of the unexpected coefficient sign. 
 
-+ Then we will remove one variable at a time by greatest p-value until we have a parsimonious model with only statistically significant variables. 
++ Then we will remove one variable at a time by greatest coefficient p-value until we have a parsimonious model with only statistically significant variables. 
 
 + Along the way, we will take note if the removal of a variable causes a significant change in adjusted R-squared.
 
-+ TEAM_PITCHING_SO was removed because it didn't have the expected sign. 
++ Lastly, TEAM_PITCHING_SO was removed because it didn't have the expected sign. 
  
 ```{r mod3, echo=F}
 mod3 <- update(mod1, .~. -TEAM_FIELDING_DP -TEAM_BATTING_2B -TEAM_BASERUN_CS -TEAM_PITCHING_HR, data = train_imputed)
