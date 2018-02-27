@@ -1,0 +1,20 @@
+---
+title: "Visualizing Residual Diagnostics"
+author: "Kyle Gilde"
+date: "February 26, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r fig.width = 10, fig.height = 10}
+d <- 3
+par(mfrow=c(4, d))
+n <- 100
+for(i in 1:d) {x <- runif(n) ; plot(x,rnorm(n), main = "constant variance")}
+for(i in 1:d) {x <- runif(n) ; plot(x,x*rnorm(n), main = "strong nonconstant variance")}
+for(i in 1:d) {x <- runif(n) ; plot(x,sqrt((x))*rnorm(n), main = "mild nonconstant variance")}
+for(i in 1:d) {x <- runif(n) ; plot(x,cos(x*pi/25)+rnorm(n,sd=1), main = "nonlinearity")}
+```

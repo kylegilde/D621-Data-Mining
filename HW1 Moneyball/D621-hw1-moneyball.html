@@ -95,8 +95,18 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 </ul></li>
 <li><a href="#build-models">3. BUILD MODELS</a><ul>
 <li><a href="#model-1-all-variables">Model 1: All Variables</a></li>
+<li><a href="#model-2-only-highly-correlated-variables">Model 2: Only Highly Correlated Variables</a></li>
+<li><a href="#model-3-backwards-elimination">Model 3: Backwards Elimination</a></li>
 </ul></li>
-<li><a href="#select-models">4. SELECT MODELS</a></li>
+<li><a href="#select-model">4. SELECT MODEL</a><ul>
+<li><a href="#evaluation">Evaluation</a></li>
+<li><a href="#residual-plots">Residual Plots</a></li>
+<li><a href="#test-model">Test Model</a><ul>
+<li><a href="#explore">Explore</a></li>
+<li><a href="#transform-impute-missing-values">Transform &amp; Impute Missing Values</a></li>
+</ul></li>
+</ul></li>
+<li><a href="#code-appendix">Code Appendix</a></li>
 </ul>
 </div>
 
@@ -112,7 +122,9 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## data.table                           TRUE
 ## missForest                           TRUE
 ## mltools                              TRUE
-## htmlTable                            TRUE</code></pre>
+## htmlTable                            TRUE
+## broom                                TRUE
+## MLmetrics                            TRUE</code></pre>
 <div id="prompt-and-data-overview" class="section level1">
 <h1>Prompt and Data Overview</h1>
 <p>In this homework assignment, you will explore, analyze and model a data set containing approximately 2200 records.</p>
@@ -707,14 +719,529 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <div id="creating-bins" class="section level2">
 <h2>Creating Bins</h2>
 <p>From the histograms and summary statitics, TEAM_PITCHING_H seems to have the extreme outliers, so let’s put these values into quintile bins to mitigate their effect.</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">train_raw$TEAM_PITCHING_H &lt;-<span class="st"> </span><span class="kw">bin_data</span>(train_raw$TEAM_PITCHING_H, <span class="dt">bins =</span> <span class="dv">5</span>, <span class="dt">binType =</span> <span class="st">&quot;quantile&quot;</span>) </code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">train_raw$TEAM_PITCHING_H &lt;-<span class="st"> </span><span class="kw">bin_data</span>(train_raw$TEAM_PITCHING_H, <span class="dt">bins =</span> <span class="dv">5</span>, <span class="dt">binType =</span> <span class="st">&quot;quantile&quot;</span>) 
+
+<span class="kw">levels</span>(train_raw$TEAM_PITCHING_H) &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;One&quot;</span>,<span class="st">&quot;Two&quot;</span>,<span class="st">&quot;Three&quot;</span>,<span class="st">&quot;Four&quot;</span>,<span class="st">&quot;Five&quot;</span>)</code></pre></div>
 </div>
 <div id="missing-value-imputation" class="section level2">
 <h2>Missing Value Imputation</h2>
 <p>Let’s use the missForest package to do nonparametric missing-value imputation using Random Forest.</p>
-<p>First, let’s try leaving in TEAM_BATTING_HPB, even though it was all of those <code>NA</code>s.</p>
+<p>First, let’s try leaving in TEAM_BATTING_HPB, even though it has all of those <code>NA</code>s.</p>
 <p><strong>When we check the out-of-the-bag error, we would like to the normalized root mean-squares error (NRMSE) near zero, which would indicate a well-fitted imputation. However, as suspected, the normalized root mean-squares error (NRMSE) for TEAM_BATTING_HBP is nearly twice as large as the next highest NRMSE. Let’s remove it and impute the missing values again.</strong></p>
 <p><a href="http://rcompanion.org/handbook/G_14.html">Source: Accuracy and Errors for Models</a></p>
+<pre><code>##   missForest iteration 1 in progress...done!
+##   missForest iteration 2 in progress...done!
+##   missForest iteration 3 in progress...done!</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">variable</th>
+<th align="right">NA_ct</th>
+<th align="right">NA_pct</th>
+<th align="right">MSE</th>
+<th align="right">RMSE</th>
+<th align="right">NRMSE</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">TEAM_BATTING_HBP</td>
+<td align="right">2085</td>
+<td align="right">91.61</td>
+<td align="right">188.93</td>
+<td align="right">13.75</td>
+<td align="right">0.21</td>
+</tr>
+<tr class="even">
+<td align="left">TEAM_FIELDING_DP</td>
+<td align="right">286</td>
+<td align="right">12.57</td>
+<td align="right">336.94</td>
+<td align="right">18.36</td>
+<td align="right">0.10</td>
+</tr>
+<tr class="odd">
+<td align="left">TEAM_BASERUN_CS</td>
+<td align="right">772</td>
+<td align="right">33.92</td>
+<td align="right">175.83</td>
+<td align="right">13.26</td>
+<td align="right">0.07</td>
+</tr>
+<tr class="even">
+<td align="left">TEAM_BASERUN_SB</td>
+<td align="right">131</td>
+<td align="right">5.76</td>
+<td align="right">1512.88</td>
+<td align="right">38.90</td>
+<td align="right">0.06</td>
+</tr>
+<tr class="odd">
+<td align="left">TEAM_BATTING_SO</td>
+<td align="right">102</td>
+<td align="right">4.48</td>
+<td align="right">1988.85</td>
+<td align="right">44.60</td>
+<td align="right">0.03</td>
+</tr>
+<tr class="even">
+<td align="left">TEAM_PITCHING_SO</td>
+<td align="right">102</td>
+<td align="right">4.48</td>
+<td align="right">148081.99</td>
+<td align="right">384.81</td>
+<td align="right">0.02</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The remaining 5 imputed variables have NRMSE values have better fits and range from .02 to .11.</strong></p>
+<pre><code>##   missForest iteration 1 in progress...done!
+##   missForest iteration 2 in progress...done!
+##   missForest iteration 3 in progress...done!
+##   missForest iteration 4 in progress...done!
+##   missForest iteration 5 in progress...done!</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">variable</th>
+<th align="right">NA_ct</th>
+<th align="right">NA_pct</th>
+<th align="right">MSE</th>
+<th align="right">RMSE</th>
+<th align="right">NRMSE</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">TEAM_FIELDING_DP</td>
+<td align="right">286</td>
+<td align="right">12.57</td>
+<td align="right">346.81</td>
+<td align="right">18.62</td>
+<td align="right">0.11</td>
+</tr>
+<tr class="even">
+<td align="left">TEAM_BASERUN_CS</td>
+<td align="right">772</td>
+<td align="right">33.92</td>
+<td align="right">184.33</td>
+<td align="right">13.58</td>
+<td align="right">0.07</td>
+</tr>
+<tr class="odd">
+<td align="left">TEAM_BASERUN_SB</td>
+<td align="right">131</td>
+<td align="right">5.76</td>
+<td align="right">1622.17</td>
+<td align="right">40.28</td>
+<td align="right">0.06</td>
+</tr>
+<tr class="even">
+<td align="left">TEAM_BATTING_SO</td>
+<td align="right">102</td>
+<td align="right">4.48</td>
+<td align="right">2408.53</td>
+<td align="right">49.08</td>
+<td align="right">0.04</td>
+</tr>
+<tr class="odd">
+<td align="left">TEAM_PITCHING_SO</td>
+<td align="right">102</td>
+<td align="right">4.48</td>
+<td align="right">144651.15</td>
+<td align="right">380.33</td>
+<td align="right">0.02</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="build-models" class="section level1">
+<h1>3. BUILD MODELS</h1>
+<div id="model-1-all-variables" class="section level2">
+<h2>Model 1: All Variables</h2>
+<p>First, let’s build a model with all variables.</p>
+<pre><code>## 
+## Call:
+## lm(formula = TARGET_WINS ~ ., data = train_imputed)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -55.211  -8.315   0.306   8.205  53.170 
+## 
+## Coefficients:
+##                        Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)          27.7209866  5.7278460   4.840 1.39e-06 ***
+## TEAM_BATTING_H        0.0469301  0.0036338  12.915  &lt; 2e-16 ***
+## TEAM_BATTING_2B      -0.0079764  0.0091371  -0.873  0.38277    
+## TEAM_BATTING_3B       0.0236381  0.0165392   1.429  0.15308    
+## TEAM_BATTING_HR       0.0596008  0.0276302   2.157  0.03110 *  
+## TEAM_BATTING_BB       0.0129136  0.0052066   2.480  0.01320 *  
+## TEAM_BATTING_SO      -0.0197276  0.0026800  -7.361 2.54e-13 ***
+## TEAM_BASERUN_SB       0.0487968  0.0054873   8.893  &lt; 2e-16 ***
+## TEAM_BASERUN_CS       0.0270736  0.0157574   1.718  0.08591 .  
+## TEAM_PITCHING_HTwo   -1.0472972  0.8857734  -1.182  0.23719    
+## TEAM_PITCHING_HThree -1.1482050  0.9497489  -1.209  0.22681    
+## TEAM_PITCHING_HFour  -4.3765799  1.1003151  -3.978 7.18e-05 ***
+## TEAM_PITCHING_HFive  -3.4921932  1.4095818  -2.477  0.01330 *  
+## TEAM_PITCHING_HR      0.0351548  0.0247057   1.423  0.15489    
+## TEAM_PITCHING_BB     -0.0035252  0.0035830  -0.984  0.32528    
+## TEAM_PITCHING_SO      0.0026264  0.0008999   2.918  0.00355 ** 
+## TEAM_FIELDING_E      -0.0325077  0.0023292 -13.956  &lt; 2e-16 ***
+## TEAM_FIELDING_DP     -0.1090930  0.0140507  -7.764 1.24e-14 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 12.61 on 2258 degrees of freedom
+## Multiple R-squared:  0.3635, Adjusted R-squared:  0.3588 
+## F-statistic: 75.87 on 17 and 2258 DF,  p-value: &lt; 2.2e-16</code></pre>
+<p>In the model output above, we notice the following:</p>
+<ul>
+<li><p>Of the 14 continuous &amp; intercept variables, 9 have statistically significant p-values at the 5% significance level. We may want to explore which of the variables are actually necessary to a parsimonious model.</p></li>
+<li><p>Only 2 out of the 4 TEAM_PITCHING_H quintile dummy variables are statistically significant, so let’s check an ANOVA summary to make sure that the group means are significantly different. The F-statistic’s p-value is near zero, so we would reject the null hypothesis that the means are equal and keep the dummy variables in the model.</p></li>
+</ul>
+<pre><code>##                   Df Sum Sq Mean Sq F value Pr(&gt;F)    
+## TEAM_PITCHING_H    4  22687    5672   23.77 &lt;2e-16 ***
+## Residuals       2271 541810     239                   
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
+<ul>
+<li><p>While we would expect negative coefficients for Fielding Errors, Walks Allowed &amp; Batting Strikeouts, we wouldn’t expect negative values for Double Plays &amp; Batting Doubles. Additionally, it’s surprising that Caught Stealing &amp; Home Runs Allowed do not have negative coefficients. While none of the variables are perfectly co-linear and were automatically removed from the model, these unexpected sign may indicate that we have some.</p></li>
+<li><p>At 0.3635, the adjusted <span class="math inline">\(R^2\)</span> is not as high as we would prefer, and it indicates that only 36% of the variance in the response variable can be explained by the predictor variables.</p></li>
+<li><p>At 76, the F-statistic is large, and the model’s p-value is near zero. If the model’s diagnostics are sufficient, these values indicate that we would reject the null hypothesis that there is no relationship between the explanatory &amp; response variables.</p></li>
+</ul>
+</div>
+<div id="model-2-only-highly-correlated-variables" class="section level2">
+<h2>Model 2: Only Highly Correlated Variables</h2>
+<p>From our Correlated Variable Pairs table, let’s use only the 4 explanatory variables that were most correlated with the response variable.</p>
+<pre><code>##               Var1        Var2 Correlation
+## 1  TEAM_PITCHING_H TARGET_WINS   0.4712343
+## 2   TEAM_BATTING_H TARGET_WINS   0.4699467
+## 3  TEAM_BATTING_BB TARGET_WINS   0.4686879
+## 4 TEAM_PITCHING_BB TARGET_WINS   0.4683988</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = TARGET_WINS ~ TEAM_PITCHING_H + TEAM_BATTING_H + 
+##     TEAM_BATTING_BB + TEAM_PITCHING_BB, data = train_imputed)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -59.728  -8.963   0.394   9.085  65.012 
+## 
+## Coefficients:
+##                       Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)          -6.052105   3.788542  -1.597  0.11030    
+## TEAM_PITCHING_HTwo    0.092667   0.955466   0.097  0.92275    
+## TEAM_PITCHING_HThree -0.034295   1.005300  -0.034  0.97279    
+## TEAM_PITCHING_HFour  -3.315098   1.095721  -3.025  0.00251 ** 
+## TEAM_PITCHING_HFive  -1.341073   1.301417  -1.030  0.30290    
+## TEAM_BATTING_H        0.049052   0.002722  18.018  &lt; 2e-16 ***
+## TEAM_BATTING_BB       0.036671   0.003172  11.563  &lt; 2e-16 ***
+## TEAM_PITCHING_BB     -0.004882   0.002201  -2.218  0.02667 *  
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 13.87 on 2268 degrees of freedom
+## Multiple R-squared:  0.2275, Adjusted R-squared:  0.2251 
+## F-statistic: 95.41 on 7 and 2268 DF,  p-value: &lt; 2.2e-16</code></pre>
+<p>In the Model #2 output above, we notice the following:</p>
+<ul>
+<li><p>All 3 continuous variables are statistically significant, but this time the intercept is not.</p></li>
+<li><p>Only 1 of the 4 TEAM_PITCHING_H dummy variables is statistically significant.</p></li>
+<li><p>We would expect a negative coefficient for Walks Allowed and positive ones for Batting Walks &amp; Batting Hits. However, 1 of the 4 Hits Allowed dummy variables does not have a negative coefficient, and this unexpected coefficient sign may indicate that we still have some collinearity.</p></li>
+<li><p>At 0.2275, the adjusted <span class="math inline">\(R^2\)</span> indicates that this model explains less of variance in the response variable than Model #1.</p></li>
+<li><p>At 95, the F-statistic is larger than model #1, and the model’s p-value is near zero. If the model’s diagnostics are sufficient, these values indicate that we would reject the null hypothesis that there is no relationship between the explanatory &amp; response variables.</p></li>
+</ul>
+</div>
+<div id="model-3-backwards-elimination" class="section level2">
+<h2>Model 3: Backwards Elimination</h2>
+<ul>
+<li><p>Let’s start with Model #1, but let’s remove the 4 variables that appeared to have multicollinearity issues because of the unexpected coefficient sign.</p></li>
+<li><p>Then we will remove one variable at a time by greatest p-value until we have a parsimonious model with only statistically significant variables.</p></li>
+<li><p>Along the way, we will take note if the removal of a variable causes a significant change in adjusted R-squared.</p></li>
+<li><p>TEAM_PITCHING_SO was removed because it didn’t have the expected sign.</p></li>
+</ul>
+<pre><code>## 
+## Call:
+## lm(formula = TARGET_WINS ~ TEAM_BATTING_H + TEAM_BATTING_3B + 
+##     TEAM_BATTING_HR + TEAM_BATTING_SO + TEAM_BASERUN_SB + TEAM_FIELDING_E, 
+##     data = train_imputed)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -51.587  -8.536   0.215   8.447  52.030 
+## 
+## Coefficients:
+##                  Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)     25.353322   4.225870   6.000 2.30e-09 ***
+## TEAM_BATTING_H   0.037506   0.002673  14.033  &lt; 2e-16 ***
+## TEAM_BATTING_3B  0.031892   0.016301   1.956   0.0505 .  
+## TEAM_BATTING_HR  0.077239   0.009070   8.516  &lt; 2e-16 ***
+## TEAM_BATTING_SO -0.013835   0.002230  -6.205 6.47e-10 ***
+## TEAM_BASERUN_SB  0.065093   0.004087  15.928  &lt; 2e-16 ***
+## TEAM_FIELDING_E -0.031090   0.001677 -18.537  &lt; 2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 12.89 on 2269 degrees of freedom
+## Multiple R-squared:  0.3325, Adjusted R-squared:  0.3307 
+## F-statistic: 188.4 on 6 and 2269 DF,  p-value: &lt; 2.2e-16</code></pre>
+<p>In the Model #3 output above, we notice the following:</p>
+<ul>
+<li><p>All 6 continuous variables &amp; and the intercept are statistically significant. All of them except for TEAM_BATTING_3B have p-values that are near zero.</p></li>
+<li><p>Unlike the previous models, we do not have any unexpected coefficient signs, which means that we have removed at least some of the multilinearity.</p></li>
+<li><p>At 0.3273, the adjusted <span class="math inline">\(R^2\)</span> indicates that this model explains 33% of the variance in the response variable.</p></li>
+<li><p>At 185.5, the F-statistic is larger than the other 2 models, and the model’s p-value is near zero. If the model’s diagnostics are sufficient, these values indicate that we would reject the null hypothesis that there is no relationship between the explanatory &amp; response variables.</p></li>
+</ul>
+</div>
+</div>
+<div id="select-model" class="section level1">
+<h1>4. SELECT MODEL</h1>
+<div id="evaluation" class="section level2">
+<h2>Evaluation</h2>
+<p>The table below summarizes the 3 models.</p>
+<ul>
+<li><p>While Model #1 has the highest adjusted R-squared, it also had 5 variables that were not statistically significant, and 4 variables with unexpected signs, which indicated multicollinearity issues.</p></li>
+<li><p>Model #2 used fewer variables, but the intercept coefficient was not statistically significant. We also saw some evidence of collinearity.</p></li>
+<li><p><strong>Of the 3, Model #3 is the best.</strong> Removing the non-significance and collinear variables makes it more parsimonious with an adjusted R-squared that is less than Model #1 but much greater than Model #2. This model’s F-statistic is also sinificantly larger than the other 2.</p></li>
+</ul>
+<table>
+<thead>
+<tr class="header">
+<th align="left">model_name</th>
+<th align="right">n_predictors</th>
+<th align="right">r.squared</th>
+<th align="right">adj.r.squared</th>
+<th align="right">sigma</th>
+<th align="right">statistic</th>
+<th align="right">p.value</th>
+<th align="right">df</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">mod1</td>
+<td align="right">14</td>
+<td align="right">0.3635</td>
+<td align="right">0.3588</td>
+<td align="right">12.6140</td>
+<td align="right">75.8684</td>
+<td align="right">0</td>
+<td align="right">18</td>
+</tr>
+<tr class="even">
+<td align="left">mod2</td>
+<td align="right">4</td>
+<td align="right">0.2275</td>
+<td align="right">0.2251</td>
+<td align="right">13.8663</td>
+<td align="right">95.4145</td>
+<td align="right">0</td>
+<td align="right">8</td>
+</tr>
+<tr class="odd">
+<td align="left">mod3</td>
+<td align="right">6</td>
+<td align="right">0.3325</td>
+<td align="right">0.3307</td>
+<td align="right">12.8867</td>
+<td align="right">188.3652</td>
+<td align="right">0</td>
+<td align="right">7</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="residual-plots" class="section level2">
+<h2>Residual Plots</h2>
+<ul>
+<li><p>In the Q-Q plot, we see some deviations for the normal distribution at the ends. Some of the extreme cases have been labeled. However, as the LMR text suggests, perhaps we can relax the normality assumption since we have more than 2200 observations.</p></li>
+<li><p>In the residuals-fitted and standardzied residuals-fitted plots, the best fitted line has a curve in the main cluster, which indicates that we do not have constant variance.</p></li>
+<li><p>Ideally, prior to making any inferences, we would want to attempt to transform the data in order to better meet the regression assumptions.</p></li>
+</ul>
+<p><img src="data:image/png;base64,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" /><!-- --></p>
+</div>
+<div id="test-model" class="section level2">
+<h2>Test Model</h2>
+<div id="explore" class="section level3">
+<h3>Explore</h3>
+<p>Let’s load the data, and look at our <code>NA</code> rates.</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th align="left">class_type</th>
+<th align="right">n_rows</th>
+<th align="right">complete_cases</th>
+<th align="right">NA_ct</th>
+<th align="right">NA_pct</th>
+<th align="right">unique_value_ct</th>
+<th align="left">most_common_values_sample</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>TEAM_BATTING_H</td>
+<td align="left">integer</td>
+<td align="right">259</td>
+<td align="right">19</td>
+<td align="right">0</td>
+<td align="right">0.0</td>
+<td align="right">199</td>
+<td align="left">1420; 1450; 1381; 1385</td>
+</tr>
+<tr class="even">
+<td>TEAM_BATTING_2B</td>
+<td align="left">integer</td>
+<td align="right">259</td>
+<td align="right">19</td>
+<td align="right">0</td>
+<td align="right">0.0</td>
+<td align="right">137</td>
+<td align="left">218; 223; 225; 239</td>
+</tr>
+<tr class="odd">
+<td>TEAM_BATTING_3B</td>
+<td align="left">integer</td>
+<td align="right">259</td>
+<td align="right">19</td>
+<td align="right">0</td>
+<td align="right">0.0</td>
+<td align="right">91</td>
+<td align="left">36; 39; 46; 52; 53</td>
+</tr>
+<tr class="even">
+<td>TEAM_BATTING_HR</td>
+<td align="left">integer</td>
+<td align="right">259</td>
+<td align="right">19</td>
+<td align="right">0</td>
+<td align="right">0.0</td>
+<td align="right">141</td>
+<td align="left">130; 29; 98; 18</td>
+</tr>
+<tr class="odd">
+<td>TEAM_BATTING_BB</td>
+<td align="left">integer</td>
+<td align="right">259</td>
+<td align="right">19</td>
+<td align="right">0</td>
+<td align="right">0.0</td>
+<td align="right">185</td>
+<td align="left">506; 511; 435; 463</td>
+</tr>
+<tr class="even">
+<td>TEAM_BATTING_SO</td>
+<td align="left">integer</td>
+<td align="right">259</td>
+<td align="right">19</td>
+<td align="right">18</td>
+<td align="right">6.9</td>
+<td align="right">207</td>
+<td align="left">NA’s; 629; 677; 1008</td>
+</tr>
+<tr class="odd">
+<td>TEAM_BASERUN_SB</td>
+<td align="left">integer</td>
+<td align="right">259</td>
+<td align="right">19</td>
+<td align="right">13</td>
+<td align="right">5.0</td>
+<td align="right">154</td>
+<td align="left">NA’s; 72; 54; 59</td>
+</tr>
+<tr class="even">
+<td>TEAM_BASERUN_CS</td>
+<td align="left">integer</td>
+<td align="right">259</td>
+<td align="right">19</td>
+<td align="right">87</td>
+<td align="right">33.6</td>
+<td align="right">69</td>
+<td align="left">NA’s; 56; 32; 39; 40</td>
+</tr>
+<tr class="odd">
+<td>TEAM_BATTING_HBP</td>
+<td align="left">integer</td>
+<td align="right">259</td>
+<td align="right">19</td>
+<td align="right">240</td>
+<td align="right">92.7</td>
+<td align="right">18</td>
+<td align="left">NA’s; 62; 63; 42; 46</td>
+</tr>
+<tr class="even">
+<td>TEAM_PITCHING_H</td>
+<td align="left">integer</td>
+<td align="right">259</td>
+<td align="right">19</td>
+<td align="right">0</td>
+<td align="right">0.0</td>
+<td align="right">210</td>
+<td align="left">1450; 1453; 1457; 1489</td>
+</tr>
+<tr class="odd">
+<td>TEAM_PITCHING_HR</td>
+<td align="left">integer</td>
+<td align="right">259</td>
+<td align="right">19</td>
+<td align="right">0</td>
+<td align="right">0.0</td>
+<td align="right">144</td>
+<td align="left">62; 112; 25; 43</td>
+</tr>
+<tr class="even">
+<td>TEAM_PITCHING_BB</td>
+<td align="left">integer</td>
+<td align="right">259</td>
+<td align="right">19</td>
+<td align="right">0</td>
+<td align="right">0.0</td>
+<td align="right">199</td>
+<td align="left">521; 438; 471; 474</td>
+</tr>
+<tr class="odd">
+<td>TEAM_PITCHING_SO</td>
+<td align="left">integer</td>
+<td align="right">259</td>
+<td align="right">19</td>
+<td align="right">18</td>
+<td align="right">6.9</td>
+<td align="right">206</td>
+<td align="left">NA’s; 527; 554; 715</td>
+</tr>
+<tr class="even">
+<td>TEAM_FIELDING_E</td>
+<td align="left">integer</td>
+<td align="right">259</td>
+<td align="right">19</td>
+<td align="right">0</td>
+<td align="right">0.0</td>
+<td align="right">168</td>
+<td align="left">130; 137; 126; 135</td>
+</tr>
+<tr class="odd">
+<td>TEAM_FIELDING_DP</td>
+<td align="left">integer</td>
+<td align="right">259</td>
+<td align="right">19</td>
+<td align="right">31</td>
+<td align="right">12.0</td>
+<td align="right">91</td>
+<td align="left">NA’s; 146; 174; 156; 157</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="transform-impute-missing-values" class="section level3">
+<h3>Transform &amp; Impute Missing Values</h3>
+<p>We see similar patterns of missing values, so let’s do the following:</p>
+<ul>
+<li>bin TEAM_PITCHING_H</li>
+<li>drop the sparsely populated TEAM_BATTING_HBP</li>
+<li>and impute the missing values</li>
+</ul>
+<p>Since we have fewer cases, the NRMSE values are a little higher with the test data.</p>
 <pre><code>##   missForest iteration 1 in progress...done!
 ##   missForest iteration 2 in progress...done!
 ##   missForest iteration 3 in progress...done!
@@ -732,198 +1259,272 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 </thead>
 <tbody>
 <tr class="odd">
-<td align="left">TEAM_BATTING_HBP</td>
-<td align="right">2085</td>
-<td align="right">91.61</td>
-<td align="right">187.47</td>
-<td align="right">13.69</td>
-<td align="right">0.21</td>
-</tr>
-<tr class="even">
 <td align="left">TEAM_FIELDING_DP</td>
-<td align="right">286</td>
-<td align="right">12.57</td>
-<td align="right">343.17</td>
-<td align="right">18.52</td>
-<td align="right">0.11</td>
-</tr>
-<tr class="odd">
-<td align="left">TEAM_BASERUN_CS</td>
-<td align="right">772</td>
-<td align="right">33.92</td>
-<td align="right">177.33</td>
-<td align="right">13.32</td>
-<td align="right">0.07</td>
-</tr>
-<tr class="even">
-<td align="left">TEAM_BASERUN_SB</td>
-<td align="right">131</td>
-<td align="right">5.76</td>
-<td align="right">1522.08</td>
-<td align="right">39.01</td>
-<td align="right">0.06</td>
-</tr>
-<tr class="odd">
-<td align="left">TEAM_BATTING_SO</td>
-<td align="right">102</td>
-<td align="right">4.48</td>
-<td align="right">1892.80</td>
-<td align="right">43.51</td>
-<td align="right">0.03</td>
-</tr>
-<tr class="even">
-<td align="left">TEAM_PITCHING_SO</td>
-<td align="right">102</td>
-<td align="right">4.48</td>
-<td align="right">124208.73</td>
-<td align="right">352.43</td>
-<td align="right">0.02</td>
-</tr>
-</tbody>
-</table>
-<p><strong>The remaining 5 imputed variables have NRMSE values have better fits and range from .02 to .11.</strong></p>
-<pre><code>##   missForest iteration 1 in progress...done!
-##   missForest iteration 2 in progress...done!
-##   missForest iteration 3 in progress...done!
-##   missForest iteration 4 in progress...done!
-##   missForest iteration 5 in progress...done!
-##   missForest iteration 6 in progress...done!</code></pre>
-<table>
-<thead>
-<tr class="header">
-<th align="left">variable</th>
-<th align="right">NA_ct</th>
-<th align="right">NA_pct</th>
-<th align="right">MSE</th>
-<th align="right">RMSE</th>
-<th align="right">NRMSE</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td align="left">TEAM_FIELDING_DP</td>
-<td align="right">286</td>
-<td align="right">12.57</td>
-<td align="right">351.13</td>
-<td align="right">18.74</td>
-<td align="right">0.11</td>
+<td align="right">31</td>
+<td align="right">11.97</td>
+<td align="right">334.74</td>
+<td align="right">18.30</td>
+<td align="right">0.14</td>
 </tr>
 <tr class="even">
 <td align="left">TEAM_BASERUN_CS</td>
-<td align="right">772</td>
-<td align="right">33.92</td>
-<td align="right">182.85</td>
-<td align="right">13.52</td>
-<td align="right">0.07</td>
+<td align="right">87</td>
+<td align="right">33.59</td>
+<td align="right">281.24</td>
+<td align="right">16.77</td>
+<td align="right">0.11</td>
 </tr>
 <tr class="odd">
 <td align="left">TEAM_BASERUN_SB</td>
-<td align="right">131</td>
-<td align="right">5.76</td>
-<td align="right">1614.56</td>
-<td align="right">40.18</td>
-<td align="right">0.06</td>
+<td align="right">13</td>
+<td align="right">5.02</td>
+<td align="right">2809.50</td>
+<td align="right">53.00</td>
+<td align="right">0.09</td>
 </tr>
 <tr class="even">
 <td align="left">TEAM_BATTING_SO</td>
-<td align="right">102</td>
-<td align="right">4.48</td>
-<td align="right">2401.17</td>
-<td align="right">49.00</td>
-<td align="right">0.04</td>
+<td align="right">18</td>
+<td align="right">6.95</td>
+<td align="right">7160.88</td>
+<td align="right">84.62</td>
+<td align="right">0.07</td>
 </tr>
 <tr class="odd">
 <td align="left">TEAM_PITCHING_SO</td>
-<td align="right">102</td>
-<td align="right">4.48</td>
-<td align="right">164143.16</td>
-<td align="right">405.15</td>
-<td align="right">0.02</td>
+<td align="right">18</td>
+<td align="right">6.95</td>
+<td align="right">377893.49</td>
+<td align="right">614.73</td>
+<td align="right">0.06</td>
+</tr>
+<tr class="even">
+<td align="left">### Predict</td>
+<td align="right"></td>
+<td align="right"></td>
+<td align="right"></td>
+<td align="right"></td>
+<td align="right"></td>
 </tr>
 </tbody>
 </table>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">test_results &lt;-<span class="st"> </span><span class="kw">predict</span>(mod3, <span class="dt">newdata =</span> test_imputed)</code></pre></div>
 </div>
 </div>
-<div id="build-models" class="section level1">
-<h1>3. BUILD MODELS</h1>
-<div id="model-1-all-variables" class="section level2">
-<h2>Model 1: All Variables</h2>
-<p>First, let’s build a model with all variables.</p>
-<p>In the model output below, we notice the following:</p>
-<ul>
-<li><p>None of the variables are perfectly co-linear and automatically removed from the model.</p></li>
-<li><p>Out of the 14 variables plus intercept, 9 of them have statistically significant p-values.</p></li>
-<li><p>While we would expect negative coefficients for Fielding Errors, Walks Allowed &amp; Battery Strikeouts, we wouldn’t expect negative values for Double Plays &amp; Batter Doubles. Additionally, it’s surprising that Caught Stealing, Hits Allowed &amp; Homeruns Allowed do not have negative coefficients.</p></li>
-</ul>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">mod1 &lt;-<span class="st"> </span><span class="kw">lm</span>(TARGET_WINS ~<span class="st"> </span>., <span class="dt">data =</span> train_imputed)
+</div>
+<div id="code-appendix" class="section level1">
+<h1>Code Appendix</h1>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">knitr::opts_chunk$<span class="kw">set</span>(
+                      <span class="dt">error =</span> <span class="ot">FALSE</span>
+                      ,<span class="dt">message =</span> <span class="ot">FALSE</span>
+                      <span class="co">#,tidy = TRUE</span>
+                      ,<span class="dt">cache =</span> <span class="ot">TRUE</span>
+                      )
+<span class="co">#required packages</span>
+packages &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;prettydoc&quot;</span>, <span class="st">&quot;psych&quot;</span>, <span class="st">&quot;knitr&quot;</span>, <span class="st">&quot;tidyverse&quot;</span>, <span class="st">&quot;ggthemes&quot;</span>, <span class="st">&quot;corrplot&quot;</span>, <span class="st">&quot;Hmisc&quot;</span>, <span class="st">&quot;data.table&quot;</span>, <span class="st">&quot;missForest&quot;</span>, <span class="st">&quot;mltools&quot;</span>, <span class="st">&quot;htmlTable&quot;</span>, <span class="st">&quot;broom&quot;</span>, <span class="st">&quot;MLmetrics&quot;</span>) 
+<span class="co">#, &quot;pastecs&quot;</span>
 
-<span class="kw">summary</span>(mod1) </code></pre></div>
-<pre><code>## 
-## Call:
-## lm(formula = TARGET_WINS ~ ., data = train_imputed)
-## 
-## Residuals:
-##     Min      1Q  Median      3Q     Max 
-## -55.245  -8.252   0.250   8.095  52.401 
-## 
-## Coefficients:
-##                     Estimate Std. Error t value Pr(&gt;|t|)    
-## (Intercept)       27.1713596  5.8605974   4.636 3.75e-06 ***
-## TEAM_BATTING_H     0.0468673  0.0036329  12.901  &lt; 2e-16 ***
-## TEAM_BATTING_2B   -0.0092374  0.0091441  -1.010  0.31251    
-## TEAM_BATTING_3B    0.0213579  0.0166431   1.283  0.19952    
-## TEAM_BATTING_HR    0.0634166  0.0277066   2.289  0.02218 *  
-## TEAM_BATTING_BB    0.0123082  0.0052106   2.362  0.01825 *  
-## TEAM_BATTING_SO   -0.0199010  0.0026865  -7.408 1.81e-13 ***
-## TEAM_BASERUN_SB    0.0506169  0.0053876   9.395  &lt; 2e-16 ***
-## TEAM_BASERUN_CS    0.0212481  0.0158543   1.340  0.18031    
-## TEAM_PITCHING_H.L -3.1193062  1.0331237  -3.019  0.00256 ** 
-## TEAM_PITCHING_H.Q  0.2105241  0.6971070   0.302  0.76268    
-## TEAM_PITCHING_H.C  1.0011182  0.6250851   1.602  0.10939    
-## TEAM_PITCHING_H^4  1.3386739  0.5973594   2.241  0.02512 *  
-## TEAM_PITCHING_HR   0.0303169  0.0246949   1.228  0.21970    
-## TEAM_PITCHING_BB  -0.0031872  0.0035848  -0.889  0.37406    
-## TEAM_PITCHING_SO   0.0025569  0.0009006   2.839  0.00456 ** 
-## TEAM_FIELDING_E   -0.0330139  0.0023428 -14.092  &lt; 2e-16 ***
-## TEAM_FIELDING_DP  -0.1105904  0.0139604  -7.922 3.64e-15 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## Residual standard error: 12.61 on 2258 degrees of freedom
-## Multiple R-squared:  0.3635, Adjusted R-squared:  0.3587 
-## F-statistic: 75.84 on 17 and 2258 DF,  p-value: &lt; 2.2e-16</code></pre>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">par</span>(<span class="dt">mfrow=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">2</span>))
-<span class="kw">plot</span>(mod1)</code></pre></div>
-<p><img src="data:image/png;base64,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" /><!-- --></p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">mod1 &lt;-<span class="st"> </span><span class="kw">lm</span>(TARGET_WINS ~<span class="st"> </span>TEAM_PITCHING_H +<span class="st"> </span>TEAM_BATTING_H +<span class="st"> </span>TEAM_BATTING_BB +<span class="st"> </span>TEAM_PITCHING_BB, <span class="dt">data =</span> train_imputed)
+<span class="co">#see if we need to install any of them</span>
+installed_and_loaded &lt;-<span class="st"> </span>function(pkg){
+  <span class="co">#CODE SOURCE: https://gist.github.com/stevenworthington/3178163</span>
+  new.pkg &lt;-<span class="st"> </span>pkg[!(pkg %in%<span class="st"> </span><span class="kw">installed.packages</span>()[, <span class="st">&quot;Package&quot;</span>])]
+  if (<span class="kw">length</span>(new.pkg)) <span class="kw">install.packages</span>(new.pkg, <span class="dt">dependencies =</span> <span class="ot">TRUE</span>)
+  <span class="kw">sapply</span>(pkg, require, <span class="dt">character.only =</span> <span class="ot">TRUE</span>, <span class="dt">quietly =</span> <span class="ot">TRUE</span>, <span class="dt">warn.conflicts =</span> <span class="ot">FALSE</span>)
+}
 
-<span class="kw">summary</span>(mod1)</code></pre></div>
-<pre><code>## 
-## Call:
-## lm(formula = TARGET_WINS ~ TEAM_PITCHING_H + TEAM_BATTING_H + 
-##     TEAM_BATTING_BB + TEAM_PITCHING_BB, data = train_imputed)
-## 
-## Residuals:
-##     Min      1Q  Median      3Q     Max 
-## -52.133  -8.860   0.379   9.373  52.416 
-## 
-## Coefficients:
-##                    Estimate Std. Error t value Pr(&gt;|t|)    
-## (Intercept)      -0.3518000  3.2552864  -0.108 0.913949    
-## TEAM_PITCHING_H  -0.0025469  0.0003317  -7.679 2.36e-14 ***
-## TEAM_BATTING_H    0.0497667  0.0021032  23.663  &lt; 2e-16 ***
-## TEAM_BATTING_BB   0.0148499  0.0039923   3.720 0.000204 ***
-## TEAM_PITCHING_BB  0.0092317  0.0027681   3.335 0.000867 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## Residual standard error: 13.73 on 2271 degrees of freedom
-## Multiple R-squared:  0.2416, Adjusted R-squared:  0.2403 
-## F-statistic: 180.9 on 4 and 2271 DF,  p-value: &lt; 2.2e-16</code></pre>
-</div>
-</div>
-<div id="select-models" class="section level1">
-<h1>4. SELECT MODELS</h1>
+<span class="co">#excute function and display the loaded packages</span>
+<span class="kw">data.frame</span>(<span class="kw">installed_and_loaded</span>(packages))
+train_raw &lt;-<span class="st"> </span><span class="kw">read.csv</span>(<span class="st">&quot;https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW1%20Moneyball/moneyball-training-data.csv&quot;</span>)
+
+train_raw &lt;-<span class="st"> </span>train_raw %&gt;%<span class="st"> </span><span class="kw">select</span>(-INDEX)
+
+test_raw &lt;-<span class="st"> </span><span class="kw">select</span>(<span class="kw">read.csv</span>(<span class="st">&quot;https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW1%20Moneyball/moneyball-evaluation-data.csv&quot;</span>), -<span class="st"> </span>INDEX)
+
+<span class="kw">set.seed</span>(<span class="dv">5</span>)
+
+
+metadata &lt;-<span class="st"> </span>function(df){
+  <span class="co">#Takes a data frame &amp; Checks NAs, class types, inspects the unique values</span>
+  df_len &lt;-<span class="st"> </span><span class="kw">nrow</span>(df)
+  NA_ct =<span class="st"> </span><span class="kw">as.vector</span>(<span class="kw">rapply</span>(df, function(x) <span class="kw">sum</span>(<span class="kw">is.na</span>(x))))
+
+  <span class="co">#create dataframe  </span>
+  df_metadata &lt;-<span class="st"> </span><span class="kw">data.frame</span>(
+    <span class="dt">class_type =</span> <span class="kw">rapply</span>(<span class="kw">lapply</span>(df, class), function(x) x[[<span class="dv">1</span>]]),
+    <span class="dt">n_rows =</span> <span class="kw">rapply</span>(df, length),
+    <span class="dt">complete_cases =</span> <span class="kw">sum</span>(<span class="kw">complete.cases</span>(df)),
+    <span class="dt">NA_ct =</span> NA_ct,
+    <span class="dt">NA_pct =</span> NA_ct /<span class="st"> </span>df_len *<span class="st"> </span><span class="dv">100</span>,
+    <span class="dt">unique_value_ct =</span> <span class="kw">rapply</span>(df, function(x) <span class="kw">length</span>(<span class="kw">unique</span>(x))),
+    <span class="dt">most_common_values_sample =</span> <span class="kw">rapply</span>(df, function(x) <span class="kw">str_replace</span>(<span class="kw">paste</span>(<span class="kw">names</span>(<span class="kw">sort</span>(<span class="kw">summary</span>(<span class="kw">as.factor</span>(x)), <span class="dt">decreasing=</span>T))[<span class="dv">1</span>:<span class="dv">5</span>], <span class="dt">collapse =</span> <span class="st">'; '</span>), <span class="st">&quot;</span><span class="ch">\\</span><span class="st">(Other</span><span class="ch">\\</span><span class="st">); &quot;</span>, <span class="st">&quot;&quot;</span>))
+  )
+ <span class="kw">return</span>(df_metadata)
+}
+
+meta_df &lt;-<span class="st"> </span><span class="kw">metadata</span>(train_raw)
+
+<span class="kw">kable</span>(meta_df, <span class="dt">digits =</span> <span class="dv">1</span>) 
+metrics &lt;-<span class="st"> </span>function(df){
+  ###Creates summary metrics table
+  metrics_only &lt;-<span class="st"> </span>df[, <span class="kw">which</span>(<span class="kw">rapply</span>(<span class="kw">lapply</span>(df, class), function(x) x[[<span class="dv">1</span>]]) %in%<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;numeric&quot;</span>, <span class="st">&quot;integer&quot;</span>))]
+  df_metrics &lt;-<span class="st"> </span>psych::<span class="kw">describe</span>(metrics_only, <span class="dt">quant =</span> <span class="kw">c</span>(.<span class="dv">25</span>,.<span class="dv">75</span>))
+  df_metrics &lt;-<span class="st"> </span>df_metrics %&gt;%<span class="st"> </span><span class="kw">select</span>(
+    n, min, <span class="dt">Q.1st =</span> Q0<span class="fl">.25</span>, median, mean, <span class="dt">Q.3rd =</span> Q0<span class="fl">.75</span>, max, range, sd, se, skew, kurtosis
+  )
+  <span class="kw">return</span>(df_metrics)
+}
+metrics_df &lt;-<span class="st"> </span><span class="kw">metrics</span>(train_raw)
+
+<span class="kw">kable</span>(metrics_df, <span class="dt">digits =</span> <span class="dv">1</span>, <span class="dt">format.args =</span> <span class="kw">list</span>(<span class="dt">big.mark =</span> <span class="st">','</span>, <span class="dt">scientific =</span> F, <span class="dt">drop0trailing =</span> T))
+<span class="co">#calculate some parameters to deal with the outliers</span>
+train_stacked &lt;-<span class="st"> </span><span class="kw">na.omit</span>(<span class="kw">stack</span>(train_raw))
+bpstats &lt;-<span class="st"> </span><span class="kw">boxplot</span>(values ~<span class="st"> </span>ind, <span class="dt">data =</span> train_stacked, <span class="dt">plot =</span> F)$stats
+ylimits &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="dv">0</span>, <span class="kw">ceiling</span>(<span class="kw">max</span>(bpstats) /<span class="st"> </span><span class="dv">200</span>)) *<span class="st"> </span><span class="dv">200</span>
+ybreaks &lt;-<span class="st"> </span><span class="kw">seq</span>(ylimits[<span class="dv">1</span>], ylimits[<span class="dv">2</span>], <span class="dt">by =</span> <span class="dv">200</span>)
+outliers_not_shown &lt;-<span class="st"> </span><span class="kw">paste</span>(<span class="kw">sum</span>(train_stacked$values &gt;<span class="st"> </span><span class="kw">max</span>(ylimits)), <span class="st">&quot;outlier(s) not displayed&quot;</span>)
+
+<span class="kw">ggplot</span>(<span class="dt">data =</span> train_stacked, <span class="dt">mapping =</span> <span class="kw">aes</span>(<span class="dt">x =</span> ind, <span class="dt">y =</span> values)) +<span class="st"> </span>
+<span class="st">  </span><span class="kw">geom_boxplot</span>(<span class="dt">outlier.size =</span> <span class="dv">1</span>) +
+<span class="st">  </span><span class="kw">labs</span>(<span class="dt">caption =</span> <span class="kw">paste</span>(<span class="st">&quot;Red dot = mean&quot;</span>, outliers_not_shown, <span class="dt">sep =</span> <span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span>)) +
+<span class="st">  </span><span class="kw">scale_x_discrete</span>(<span class="dt">limits =</span> <span class="kw">rev</span>(<span class="kw">levels</span>(train_stacked$ind))) +
+<span class="st">  </span><span class="kw">scale_y_continuous</span>(<span class="dt">breaks =</span> ybreaks) +
+<span class="st">  </span><span class="kw">stat_summary</span>(<span class="dt">fun.y=</span>mean, <span class="dt">geom=</span><span class="st">&quot;point&quot;</span>, <span class="dt">size=</span><span class="dv">2</span>, <span class="dt">color =</span> <span class="st">&quot;red&quot;</span>) +
+<span class="st">  </span><span class="kw">coord_flip</span>(<span class="dt">ylim =</span> ylimits) +
+<span class="st">  </span><span class="kw">theme_fivethirtyeight</span>()
+<span class="kw">hist.data.frame</span>(train_raw)
+cormatrix &lt;-<span class="st"> </span><span class="kw">cor</span>(<span class="kw">drop_na</span>(train_raw))
+
+<span class="co">#find the top correlations</span>
+cor_df &lt;-<span class="st"> </span><span class="kw">data.frame</span>(<span class="dt">Var1=</span><span class="kw">rownames</span>(cormatrix)[<span class="kw">row</span>(cormatrix)],
+                     <span class="dt">Var2=</span><span class="kw">colnames</span>(cormatrix)[<span class="kw">col</span>(cormatrix)],
+                     <span class="dt">Correlation=</span><span class="kw">c</span>(cormatrix))
+
+
+corr_list &lt;-<span class="st"> </span>
+<span class="st">  </span>cor_df %&gt;%<span class="st"> </span>
+<span class="st">  </span><span class="kw">filter</span>(Var1 !=<span class="st"> </span>Var2) %&gt;%<span class="st"> </span>
+<span class="st">  </span><span class="kw">arrange</span>(-Correlation)
+
+<span class="co">#dedupe the rows</span>
+sort_rows &lt;-<span class="st"> </span><span class="kw">t</span>(<span class="kw">apply</span>(corr_list, <span class="dv">1</span>, sort, <span class="dt">decreasing =</span> T))
+fin_list &lt;-<span class="st"> </span>corr_list[!<span class="kw">duplicated</span>(sort_rows), ]
+<span class="kw">rownames</span>(fin_list) &lt;-<span class="st"> </span><span class="dv">1</span>:<span class="kw">nrow</span>(fin_list)
+<span class="co">#print table</span>
+<span class="kw">kable</span>(<span class="kw">head</span>(fin_list, <span class="dv">12</span>), <span class="dt">digits=</span><span class="dv">4</span>, <span class="dt">row.names =</span> T, <span class="dt">caption =</span> <span class="st">&quot;Top 12 Correlated Variable Pairs&quot;</span>)
+
+<span class="co">#https://stackoverflow.com/questions/28035001/transform-correlation-matrix-into-dataframe-with-records-for-each-row-column-pai</span>
+
+<span class="co">#plot</span>
+<span class="kw">corrplot</span>(cormatrix, <span class="dt">method =</span> <span class="st">&quot;square&quot;</span>, <span class="dt">type =</span> <span class="st">&quot;upper&quot;</span>)
+
+train_raw$TEAM_PITCHING_H &lt;-<span class="st"> </span><span class="kw">bin_data</span>(train_raw$TEAM_PITCHING_H, <span class="dt">bins =</span> <span class="dv">5</span>, <span class="dt">binType =</span> <span class="st">&quot;quantile&quot;</span>) 
+
+<span class="kw">levels</span>(train_raw$TEAM_PITCHING_H) &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;One&quot;</span>,<span class="st">&quot;Two&quot;</span>,<span class="st">&quot;Three&quot;</span>,<span class="st">&quot;Four&quot;</span>,<span class="st">&quot;Five&quot;</span>)
+
+impute_missing &lt;-<span class="st"> </span><span class="kw">missForest</span>(train_raw, <span class="dt">variablewise =</span> T)
+ 
+<span class="co"># check imputation error</span>
+impute_df &lt;-<span class="st"> </span><span class="kw">cbind</span>(meta_df, 
+                   <span class="dt">range =</span> metrics_df$range,
+                   <span class="dt">MSE =</span> <span class="kw">as.numeric</span>(impute_missing$OOBerror),
+                   <span class="dt">variable =</span> <span class="kw">names</span>(impute_missing$ximp)) %&gt;%<span class="st"> </span>
+<span class="st">  </span><span class="kw">select</span>(variable, NA_ct, NA_pct, MSE) %&gt;%<span class="st"> </span>
+<span class="st">  </span><span class="kw">mutate</span>(<span class="dt">RMSE =</span> <span class="kw">sqrt</span>(<span class="kw">as.numeric</span>(impute_missing$OOBerror)),
+         <span class="dt">NRMSE =</span> <span class="kw">sqrt</span>(<span class="kw">as.numeric</span>(impute_missing$OOBerror))/metrics_df$range) %&gt;%<span class="st"> </span>
+<span class="st">  </span><span class="kw">filter</span>(MSE &gt;<span class="st"> </span><span class="dv">0</span>) %&gt;%<span class="st"> </span>
+<span class="st">  </span><span class="kw">arrange</span>(-NRMSE)
+
+<span class="kw">kable</span>(impute_df, <span class="dt">digits =</span> <span class="dv">2</span>) 
+train_raw_less_one &lt;-<span class="st"> </span><span class="kw">select</span>(train_raw, -TEAM_BATTING_HBP)
+impute_missing &lt;-<span class="st"> </span><span class="kw">missForest</span>(train_raw_less_one, <span class="dt">variablewise =</span> T)
+ 
+<span class="co"># check imputation error</span>
+impute_df &lt;-<span class="st"> </span><span class="kw">cbind</span>(<span class="kw">metadata</span>(train_raw_less_one), 
+                   <span class="dt">range =</span> <span class="kw">rapply</span>(impute_missing$ximp, max) -<span class="st"> </span><span class="kw">rapply</span>(impute_missing$ximp, min),
+                   <span class="dt">MSE =</span> <span class="kw">as.numeric</span>(impute_missing$OOBerror),
+                   <span class="dt">variable =</span> <span class="kw">names</span>(impute_missing$ximp)) %&gt;%<span class="st"> </span>
+<span class="st">  </span><span class="kw">select</span>(variable, NA_ct, NA_pct, MSE) %&gt;%<span class="st"> </span>
+<span class="st">  </span><span class="kw">mutate</span>(<span class="dt">RMSE =</span> <span class="kw">sqrt</span>(<span class="kw">as.numeric</span>(impute_missing$OOBerror)),
+         <span class="dt">NRMSE =</span> <span class="kw">sqrt</span>(<span class="kw">as.numeric</span>(impute_missing$OOBerror))/(<span class="kw">rapply</span>(impute_missing$ximp, max) -<span class="st"> </span><span class="kw">rapply</span>(impute_missing$ximp, min))) %&gt;%<span class="st"> </span>
+<span class="st">  </span><span class="kw">filter</span>(MSE &gt;<span class="st"> </span><span class="dv">0</span>) %&gt;%<span class="st"> </span>
+<span class="st">  </span><span class="kw">arrange</span>(-NRMSE)
+
+<span class="kw">kable</span>(impute_df, <span class="dt">digits =</span> <span class="dv">2</span>)
+
+train_imputed &lt;-<span class="st"> </span>impute_missing$ximp 
+<span class="kw">class</span>(train_imputed$TEAM_PITCHING_H) &lt;-<span class="st"> &quot;factor&quot;</span>
+
+mod1 &lt;-<span class="st"> </span><span class="kw">lm</span>(TARGET_WINS ~<span class="st"> </span>., <span class="dt">data =</span> train_imputed)
+
+<span class="kw">summary</span>(mod1) 
+<span class="kw">summary</span>(<span class="kw">aov</span>(TARGET_WINS~TEAM_PITCHING_H, <span class="dt">data =</span> train_imputed))
+<span class="kw">filter</span>(fin_list, Var2 ==<span class="st"> &quot;TARGET_WINS&quot;</span>)[<span class="dv">1</span>:<span class="dv">4</span>,]
+
+mod2 &lt;-<span class="st"> </span><span class="kw">lm</span>(TARGET_WINS ~<span class="st"> </span>TEAM_PITCHING_H +<span class="st"> </span>TEAM_BATTING_H +<span class="st"> </span>TEAM_BATTING_BB +<span class="st"> </span>TEAM_PITCHING_BB, <span class="dt">data =</span> train_imputed)
+
+<span class="kw">summary</span>(mod2)
+mod3 &lt;-<span class="st"> </span><span class="kw">update</span>(mod1, .~. -TEAM_FIELDING_DP -TEAM_BATTING_2B -TEAM_BASERUN_CS -TEAM_PITCHING_HR, <span class="dt">data =</span> train_imputed)
+<span class="co">#summary(mod3) #R-sq = 0.334 </span>
+
+<span class="co">#remove TEAM_PITCHING_BB at 0.598258 </span>
+mod3 &lt;-<span class="st"> </span><span class="kw">update</span>(mod3, .~. -TEAM_PITCHING_BB, <span class="dt">data =</span> train_imputed)
+<span class="co">#summary(mod3) #new R-sq = 0.3342</span>
+
+<span class="co">#remove TEAM_BATTING_BB at 0.169551</span>
+mod3 &lt;-<span class="st"> </span><span class="kw">update</span>(mod3, .~. -TEAM_BATTING_BB, <span class="dt">data =</span> train_imputed)
+<span class="co">#summary(mod3) #new R-sq = 0.3341</span>
+
+<span class="co">#remove TEAM_PITCHING_H  </span>
+mod3 &lt;-<span class="st"> </span><span class="kw">update</span>(mod3, .~. -TEAM_PITCHING_H, <span class="dt">data =</span> train_imputed)
+<span class="co">#summary(mod3) #new R-sq = 0.3284</span>
+
+<span class="co">#remove TEAM_PITCHING_SO, it appears collinear  </span>
+mod3 &lt;-<span class="st"> </span><span class="kw">update</span>(mod3, .~. -TEAM_PITCHING_SO, <span class="dt">data =</span> train_imputed)
+<span class="kw">summary</span>(mod3) <span class="co">#new R-sq = 0.3273</span>
+
+model_summary &lt;-<span class="st"> </span>function(model, y_var) {
+    ### Summarizes the model's key statistics in one row
+    df_summary &lt;-<span class="st"> </span><span class="kw">glance</span>(<span class="kw">summary</span>(model))
+    model_name &lt;-<span class="st"> </span><span class="kw">deparse</span>(<span class="kw">substitute</span>(model))
+    n_predictors &lt;-<span class="st"> </span><span class="kw">ncol</span>(model$model) -<span class="st"> </span><span class="dv">1</span>
+    df_summary &lt;-<span class="st"> </span><span class="kw">cbind</span>(model_name, n_predictors, df_summary)
+    <span class="kw">return</span>(df_summary)
+}
+
+mod_sum_df1 &lt;-<span class="st"> </span><span class="kw">model_summary</span>(mod1, <span class="st">&quot;TARGET_WINS&quot;</span>)
+mod_sum_df2 &lt;-<span class="st"> </span><span class="kw">model_summary</span>(mod2, <span class="st">&quot;TARGET_WINS&quot;</span>)
+mod_sum_df3 &lt;-<span class="st"> </span><span class="kw">model_summary</span>(mod3, <span class="st">&quot;TARGET_WINS&quot;</span>)
+
+<span class="kw">kable</span>(all_results &lt;-<span class="st"> </span><span class="kw">rbind</span>(mod_sum_df1, mod_sum_df2, mod_sum_df3), <span class="dt">digits =</span> <span class="dv">4</span>)
+<span class="kw">par</span>(<span class="dt">mfrow=</span><span class="kw">c</span>(<span class="dv">2</span>,<span class="dv">2</span>))
+<span class="kw">plot</span>(mod3)
+<span class="kw">kable</span>(<span class="kw">metadata</span>(test_raw), <span class="dt">digits =</span> <span class="dv">1</span>)
+
+test_raw$TEAM_PITCHING_H &lt;-<span class="st"> </span><span class="kw">bin_data</span>(test_raw$TEAM_PITCHING_H, <span class="dt">bins =</span> <span class="dv">5</span>, <span class="dt">binType =</span> <span class="st">&quot;quantile&quot;</span>) 
+
+<span class="kw">levels</span>(test_raw$TEAM_PITCHING_H) &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;One&quot;</span>,<span class="st">&quot;Two&quot;</span>,<span class="st">&quot;Three&quot;</span>,<span class="st">&quot;Four&quot;</span>,<span class="st">&quot;Five&quot;</span>)
+
+test_raw_less_one &lt;-<span class="st"> </span><span class="kw">select</span>(test_raw, -TEAM_BATTING_HBP)
+
+impute_missing_test &lt;-<span class="st"> </span><span class="kw">missForest</span>(test_raw_less_one, <span class="dt">variablewise =</span> T)
+ 
+<span class="co"># check imputation error</span>
+impute_df &lt;-<span class="st"> </span><span class="kw">cbind</span>(<span class="kw">metadata</span>(test_raw_less_one), 
+                   <span class="dt">range =</span> <span class="kw">rapply</span>(impute_missing_test$ximp, max) -<span class="st"> </span><span class="kw">rapply</span>(impute_missing_test$ximp, min),
+                   <span class="dt">MSE =</span> <span class="kw">as.numeric</span>(impute_missing_test$OOBerror),
+                   <span class="dt">variable =</span> <span class="kw">names</span>(impute_missing_test$ximp)
+                   ) %&gt;%<span class="st"> </span>
+<span class="st">  </span><span class="kw">select</span>(variable, NA_ct, NA_pct, MSE) %&gt;%<span class="st"> </span>
+<span class="st">  </span><span class="kw">mutate</span>(<span class="dt">RMSE =</span> <span class="kw">sqrt</span>(<span class="kw">as.numeric</span>(impute_missing_test$OOBerror)),
+         <span class="dt">NRMSE =</span> <span class="kw">sqrt</span>(<span class="kw">as.numeric</span>(impute_missing_test$OOBerror))/(<span class="kw">rapply</span>(impute_missing_test$ximp, max) -<span class="st"> </span><span class="kw">rapply</span>(impute_missing_test$ximp, min))) %&gt;%<span class="st"> </span>
+<span class="st">  </span><span class="kw">filter</span>(MSE &gt;<span class="st"> </span><span class="dv">0</span>) %&gt;%<span class="st"> </span>
+<span class="st">  </span><span class="kw">arrange</span>(-NRMSE)
+
+<span class="kw">kable</span>(impute_df, <span class="dt">digits =</span> <span class="dv">2</span>)
+
+test_imputed &lt;-<span class="st"> </span>impute_missing$ximp 
+<span class="kw">class</span>(test_imputed$TEAM_PITCHING_H) &lt;-<span class="st"> &quot;factor&quot;</span>
+test_results &lt;-<span class="st"> </span><span class="kw">predict</span>(mod3, <span class="dt">newdata =</span> test_imputed)</code></pre></div>
 </div>
 </section>
 
