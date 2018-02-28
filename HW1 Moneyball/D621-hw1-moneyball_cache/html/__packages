@@ -13,16 +13,10 @@ stringr
 forcats
 ggthemes
 corrplot
-bindrcpp
 lattice
 survival
 Formula
 Hmisc
-boot
-pastecs
-testthat
-brew
-SortableHTMLTables
 data.table
 randomForest
 foreach
@@ -33,3 +27,4 @@ mltools
 htmlTable
 broom
 MLmetrics
+bindrcpp

@@ -56,9 +56,9 @@ train_raw <- read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Min
 
 train_raw <- train_raw %>% select(-INDEX)
 
-test_raw <- select(read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW1%20Moneyball/moneyball-evaluation-data.csv"), - INDEX)
+test_raw <- dplyr::select(read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW1%20Moneyball/moneyball-evaluation-data.csv"), - INDEX)
 
-set.seed(5)
+set.seed(5) 
 
 ```
 
@@ -87,7 +87,8 @@ Let's take a look at the data's non-statistical aspects.
 
 + We will have to drop them or try to impute the missing values.
 
-```{r meta, echo=F}
+
+```{r meta, echo=F, fig.width = 10}
 
 metadata <- function(df){
   #Takes a data frame & Checks NAs, class types, inspects the unique values
@@ -96,18 +97,21 @@ metadata <- function(df){
 
   #create dataframe  
   df_metadata <- data.frame(
+    vars = names(df),
     class_type = rapply(lapply(df, class), function(x) x[[1]]),
     n_rows = rapply(df, length),
     complete_cases = sum(complete.cases(df)),
     NA_ct = NA_ct,
     NA_pct = NA_ct / df_len * 100,
     unique_value_ct = rapply(df, function(x) length(unique(x))),
-    most_common_values_sample = rapply(df, function(x) str_replace(paste(names(sort(summary(as.factor(x)), decreasing=T))[1:5], collapse = '; '), "\\(Other\\); ", ""))
+    most_common_values = rapply(df, function(x) str_replace(paste(names(sort(summary(as.factor(x)), decreasing=T))[1:5], collapse = '; '), "\\(Other\\); ", ""))
   )
+ rownames(df_metadata) <- NULL
  return(df_metadata)
 }
 
 meta_df <- metadata(train_raw)
+
 
 kable(meta_df, digits = 1) 
 ```
@@ -120,12 +124,17 @@ kable(meta_df, digits = 1)
 metrics <- function(df){
   ###Creates summary metrics table
   metrics_only <- df[, which(rapply(lapply(df, class), function(x) x[[1]]) %in% c("numeric", "integer"))]
+  
   df_metrics <- psych::describe(metrics_only, quant = c(.25,.75))
-  df_metrics <- df_metrics %>% select(
-    n, min, Q.1st = Q0.25, median, mean, Q.3rd = Q0.75, max, range, sd, se, skew, kurtosis
+  
+  df_metrics <- 
+    dplyr::select(df_metrics, n, min, Q.1st = Q0.25, median, mean, Q.3rd = Q0.75, 
+    max, range, sd, se, skew, kurtosis
   )
+  
   return(df_metrics)
 }
+
 metrics_df <- metrics(train_raw)
 
 kable(metrics_df, digits = 1, format.args = list(big.mark = ',', scientific = F, drop0trailing = T))
@@ -143,7 +152,7 @@ kable(metrics_df, digits = 1, format.args = list(big.mark = ',', scientific = F,
 
 + A few of them have so many outliers that we may be dealing with non-unimodal distributions.
 
-+ The data set has 193 observations that are outside of the IQR. 
++ The data set has 193 observations that are more extreme than the 1.5 * IQR of the boxplot whiskers. 
 
 ```{r box, echo=F}
 #calculate some parameters to deal with the outliers
@@ -161,6 +170,8 @@ ggplot(data = train_stacked, mapping = aes(x = ind, y = values)) +
   stat_summary(fun.y=mean, geom="point", size=2, color = "red") +
   coord_flip(ylim = ylimits) +
   theme_fivethirtyeight()
+
+
 ```
 
 ### Histograms
@@ -180,9 +191,9 @@ hist.data.frame(train_raw)
 
 ### Correlations
 
-+ In the correlation table and plot below, we see 4 pairs of highly correlated variables. Unsurprisingly, they are corresponding metrics for batting and pitching: home runs, walks, strike outs & hits (rows 1-4). These may present multicollinearity issues in our modeling.
++ In the correlation table and plot below, we see 4 pairs of highly correlated variables. They are corresponding metrics for batting and pitching: home runs, walks, strike outs & hits (rows 1-4). These may present multicollinearity issues in our modeling.
 
-+ Rows 8 to 11 show batting & pitching hits and walks are moderately correlated to our response variable.
++ Rows 8 to 11 show batting & pitching hits and walks are moderately correlated to our response variable. Let's consider using them for one our models.
 
 ```{r fig.width = 10, fig.height = 11, echo=F}
 cormatrix <- cor(drop_na(train_raw))
@@ -301,7 +312,7 @@ summary(mod1)
 
 In the model output above, we notice the following:
 
-+ Of the 14 continuous & intercept variables, 9 have statistically significant p-values at the 5% significance level. We may want to explore which of the variables are actually necessary to a parsimonious model.
++ Of the 14 continuous & intercept variables, 9 have statistically significant p-values at the 5% significance level. In the 3rd model, we will explore which of the variables are actually necessary to a parsimonious model.
 
 + Only 2 out of the 4 TEAM_PITCHING_H quintile dummy variables are statistically significant, so let's check an ANOVA summary to make sure that the group means are significantly different. The F-statistic's p-value is near zero, so we would reject the null hypothesis that the means are equal and keep the dummy variables in the model. 
 
@@ -310,11 +321,11 @@ summary(aov(TARGET_WINS~TEAM_PITCHING_H, data = train_imputed))
 ```
 
 
-+ While we would expect negative coefficients for Fielding Errors, Walks Allowed & Batting Strikeouts, we wouldn't expect negative values for Double Plays & Batting Doubles. Additionally, it's surprising that Caught Stealing & Home Runs Allowed do not have negative coefficients. While none of the variables are perfectly co-linear and were automatically removed from the model, these unexpected sign may indicate that we have some.
++ While we would expect negative coefficients for Fielding Errors, Walks Allowed & Batting Strikeouts, we wouldn't expect negative values for Double Plays & Batting Doubles. Additionally, it's surprising that Caught Stealing & Home Runs Allowed do not have negative coefficients. While none of the variables are perfectly collinear and were automatically removed from the model, these unexpected signs may indicate that we have some.
 
-+ At 0.3588, the adjusted $R^2$ is not as high as we would prefer, and it indicates that only 36% of the variance in the response variable can be explained by the predictor variables.
++ At 0.3602, the adjusted $R^2$ is not as high as we would prefer, and it indicates that only 36% of the variance in the response variable can be explained by the predictor variables.
 
-+ At 76, the F-statistic is large, and the model's p-value is near zero. If the model's diagnostics are sufficient, these values indicate that we would reject the null hypothesis that there is no relationship between the explanatory & response variables.
++ At 75, the F-statistic is large, and the model's p-value is near zero. If the model's diagnostics are sufficient, these values indicate that we would reject the null hypothesis that there is no relationship between the explanatory & response variables.
 
 ## Model 2: Only Highly Correlated Variables
 
@@ -342,15 +353,16 @@ In the Model #2 output above, we notice the following:
 
 ## Model 3: Backwards Elimination
 
-+ Let's start with Model #1, but let's remove the 4 variables that appeared to have multicollinearity issues because of the unexpected coefficient sign. 
++ Let's start with Model #1, but let's remove the 4 variables that appeared to have multicollinearity issues because of their unexpected coefficient signs. 
 
-+ Then we will remove one variable at a time by greatest coefficient p-value until we have a parsimonious model with only statistically significant variables. 
++ Then we will remove one variable at a time by greatest coefficient p-value until we have a parsimonious model with only statistically significant variables.
 
-+ Along the way, we will take note if the removal of a variable causes a significant change in adjusted R-squared.
++ Along the way, we will take note if the removal of a variable causes a significant changes in adjusted R-squared and coefficient estimates.
 
 + Lastly, TEAM_PITCHING_SO was removed because it didn't have the expected sign. 
  
 ```{r mod3, echo=F}
+
 mod3 <- update(mod1, .~. -TEAM_FIELDING_DP -TEAM_BATTING_2B -TEAM_BASERUN_CS -TEAM_PITCHING_HR, data = train_imputed)
 #summary(mod3) #R-sq = 0.334 
 
@@ -368,19 +380,23 @@ mod3 <- update(mod3, .~. -TEAM_PITCHING_H, data = train_imputed)
 
 #remove TEAM_PITCHING_SO, it appears collinear  
 mod3 <- update(mod3, .~. -TEAM_PITCHING_SO, data = train_imputed)
+#summary(mod3) #new R-sq = 0.3273
+
+#remove TEAM_BATTING_3B,  
+mod3 <- update(mod3, .~. -TEAM_BATTING_3B, data = train_imputed)
 summary(mod3) #new R-sq = 0.3273
 
 ```
 
 In the Model #3 output above, we notice the following:
 
-+ All 6 continuous variables & and the intercept are statistically significant. All of them except for TEAM_BATTING_3B have p-values that are near zero.
++ All 5 continuous variables & and the intercept are statistically significant. Their p-values are near zero.
 
 + Unlike the previous models, we do not have any unexpected coefficient signs, which means that we have removed at least some of the multilinearity.
 
-+ At 0.3273, the adjusted $R^2$ indicates that this model explains 33% of the variance in the response variable.
++ At 0.3258, the adjusted $R^2$ indicates that this model explains 33% of the variance in the response variable.
 
-+ At 185.5, the F-statistic is larger than the other 2 models, and the model's p-value is near zero. If the model's diagnostics are sufficient, these values indicate that we would reject the null hypothesis that there is no relationship between the explanatory & response variables.
++ At 221, the F-statistic is larger than the other 2 models, and the model's p-value is near zero. If the model's diagnostics are sufficient, these values indicate that we would reject the null hypothesis that there is no relationship between the explanatory & response variables.
 
 
 
@@ -394,18 +410,42 @@ The table below summarizes the 3 models.
 
 + Model #2 used fewer variables, but the intercept coefficient was not statistically significant. We also saw some evidence of collinearity.
 
-+ **Of the 3, Model #3 is the best.** Removing the non-significance and collinear variables makes it more parsimonious with an adjusted R-squared that is less than Model #1 but much greater than Model #2. This model's F-statistic is also sinificantly larger than the other 2.
++ **Of the 3, Model #3 is the best.** Removing the non-significant and collinear variables makes it more parsimonious with an adjusted R-squared that is less than Model #1 but much greater than Model #2. This model's F-statistic is also significantly larger than the other 2. Additionally, the difference between Model #3's predicted R-squared and R-squared is smaller than the other models, giving us more confidence that the model is not overfit.
+
 
 ```{r compare, echo=F}
+
+PRESS <- function(linear.model) {
+  #source:  https://gist.github.com/tomhopper/8c204d978c4a0cbcb8c0#file-press-r
+  #' calculate the predictive residuals
+  pr <- residuals(linear.model)/(1-lm.influence(linear.model)$hat)
+  #' calculate the PRESS
+  PRESS <- sum(pr^2)
+  
+  return(PRESS)
+}
+pred_r_squared <- function(linear.model) {
+  #source: https://gist.github.com/tomhopper/8c204d978c4a0cbcb8c0#file-pred_r_squared-r
+  #' Use anova() to get the sum of squares for the linear model
+  lm.anova <- anova(linear.model)
+  #' Calculate the total sum of squares
+  tss <- sum(lm.anova$'Sum Sq')
+  # Calculate the predictive R^2
+  pred.r.squared <- 1-PRESS(linear.model)/(tss)
+  
+  return(pred.r.squared)
+}
+
+
 model_summary <- function(model, y_var) {
     ### Summarizes the model's key statistics in one row
     df_summary <- glance(summary(model))
     model_name <- deparse(substitute(model))
     n_predictors <- ncol(model$model) - 1
-    df_summary <- cbind(model_name, n_predictors, df_summary)
+    pred.r.squared <- pred_r_squared(model)
+    df_summary <- cbind(model_name, n_predictors, pred.r.squared, df_summary)
     return(df_summary)
 }
-
 mod_sum_df1 <- model_summary(mod1, "TARGET_WINS")
 mod_sum_df2 <- model_summary(mod2, "TARGET_WINS")
 mod_sum_df3 <- model_summary(mod3, "TARGET_WINS")
@@ -479,6 +519,7 @@ class(test_imputed$TEAM_PITCHING_H) <- "factor"
 ```{r predict}
 test_results <- predict(mod3, newdata = test_imputed)
 ```
+
 
 
 #Code Appendix
