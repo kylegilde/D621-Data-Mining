@@ -1,0 +1,527 @@
+---
+title: "DATA 621 Business Analytics & Data Mining" 
+subtitle: "Homework #1 - Moneyball"
+author: "Kyle Gilde"
+date: "2/18/2018"
+output: 
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    toc: true
+    toc_depth: 3
+---
+
+
+```{r knitr_options, echo=FALSE}
+knitr::opts_chunk$set(
+                      error = FALSE
+                      ,message = FALSE
+                      #,tidy = TRUE
+                      ,cache = TRUE
+                      )
+```
+
+
+```{r packages, echo=F, collapse=T} 
+#required packages
+packages <- c("prettydoc", "psych", "knitr", "tidyverse", "ggthemes", "corrplot", "Hmisc", "data.table", "missForest", "mltools", "htmlTable", "broom", "MLmetrics") 
+#, "pastecs"
+
+#see if we need to install any of them
+installed_and_loaded <- function(pkg){
+  #CODE SOURCE: https://gist.github.com/stevenworthington/3178163
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg)) install.packages(new.pkg, dependencies = TRUE)
+  sapply(pkg, require, character.only = TRUE, quietly = TRUE, warn.conflicts = FALSE)
+}
+
+#excute function and display the loaded packages
+data.frame(installed_and_loaded(packages))
+```
+# Prompt and Data Overview
+
+In this homework assignment, you will explore, analyze and model a data set containing approximately 2200 records. 
+
+Each record represents a professional baseball team from the years 1871 to 2006 inclusive. Each record has the performance of the team for the given year, with all of the statistics adjusted to match the performance of a 162 game season. 
+
+Your objective is to build a multiple linear regression model on the training data to predict the number of wins for the team. You can only use the variables given to you (or variables that you derive from the variables provided). Below is a short description of the variables of interest in the data set:
+
+
+![](https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW1%20Moneyball/data-dictionary.PNG)
+
+# 1. DATA EXPLORATION
+
+```{r getdata, echo=F}
+train_raw <- read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW1%20Moneyball/moneyball-training-data.csv")
+
+train_raw <- train_raw %>% select(-INDEX)
+
+test_raw <- dplyr::select(read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW1%20Moneyball/moneyball-evaluation-data.csv"), - INDEX)
+
+set.seed(5) 
+
+```
+
+## Non-visual exploration
+
+**The data set contains 15 explanatory variables, and they can be categorized into four  groups:**
+
+1. 7 batting metrics
+
+2. 2 baserunning metrics
+
+3. 2 fielding metrics
+
+4. 4 pitching metrics
+
+###Data Inspection
+
+Let's take a look at the data's non-statistical aspects.
+
+
++ In the table below, we that the data set contains all integers.
+
++ The data set has less than 10% complete cases. 
+
++ Six variables are missing values with TEAM_BATTING_HBP, TEAM_BASERUN_CS & TEAM_FIELDING_DP being the most sparse with 92%, 34% & 13% `NA`s, respectively. 
+
++ We will have to drop them or try to impute the missing values.
+
+
+```{r meta, echo=F, fig.width = 10}
+
+metadata <- function(df){
+  #Takes a data frame & Checks NAs, class types, inspects the unique values
+  df_len <- nrow(df)
+  NA_ct = as.vector(rapply(df, function(x) sum(is.na(x))))
+
+  #create dataframe  
+  df_metadata <- data.frame(
+    vars = names(df),
+    class_type = rapply(lapply(df, class), function(x) x[[1]]),
+    n_rows = rapply(df, length),
+    complete_cases = sum(complete.cases(df)),
+    NA_ct = NA_ct,
+    NA_pct = NA_ct / df_len * 100,
+    unique_value_ct = rapply(df, function(x) length(unique(x))),
+    most_common_values = rapply(df, function(x) str_replace(paste(names(sort(summary(as.factor(x)), decreasing=T))[1:5], collapse = '; '), "\\(Other\\); ", ""))
+  )
+ rownames(df_metadata) <- NULL
+ return(df_metadata)
+}
+
+meta_df <- metadata(train_raw)
+
+
+kable(meta_df, digits = 1) 
+```
+
+
+
+###Statistical Summary
+
+```{r stats, echo=F}
+metrics <- function(df){
+  ###Creates summary metrics table
+  metrics_only <- df[, which(rapply(lapply(df, class), function(x) x[[1]]) %in% c("numeric", "integer"))]
+  
+  df_metrics <- psych::describe(metrics_only, quant = c(.25,.75))
+  
+  df_metrics <- 
+    dplyr::select(df_metrics, n, min, Q.1st = Q0.25, median, mean, Q.3rd = Q0.75, 
+    max, range, sd, se, skew, kurtosis
+  )
+  
+  return(df_metrics)
+}
+
+metrics_df <- metrics(train_raw)
+
+kable(metrics_df, digits = 1, format.args = list(big.mark = ',', scientific = F, drop0trailing = T))
+```
+
+
+
+## Visual Exploration
+
+### Boxplots
+
++ In the boxplots below, we see that the variance of some of the explanatory variables greatly exceeds the variance of the response games-won variable. 
+
++ According to the summary statistics table above, the TARGET_WIN's standard deviation is the 2nd smallest of all the variables.
+
++ A few of them have so many outliers that we may be dealing with non-unimodal distributions.
+
++ The data set has 193 observations that are more extreme than the 1.5 * IQR of the boxplot whiskers. 
+
+```{r box, echo=F}
+#calculate some parameters to deal with the outliers
+train_stacked <- na.omit(stack(train_raw))
+bpstats <- boxplot(values ~ ind, data = train_stacked, plot = F)$stats
+ylimits <- c(0, ceiling(max(bpstats) / 200)) * 200
+ybreaks <- seq(ylimits[1], ylimits[2], by = 200)
+outliers_not_shown <- paste(sum(train_stacked$values > max(ylimits)), "outlier(s) not displayed")
+
+ggplot(data = train_stacked, mapping = aes(x = ind, y = values)) + 
+  geom_boxplot(outlier.size = 1) +
+  labs(caption = paste("Red dot = mean", outliers_not_shown, sep = "\n")) +
+  scale_x_discrete(limits = rev(levels(train_stacked$ind))) +
+  scale_y_continuous(breaks = ybreaks) +
+  stat_summary(fun.y=mean, geom="point", size=2, color = "red") +
+  coord_flip(ylim = ylimits) +
+  theme_fivethirtyeight()
+
+
+```
+
+### Histograms
+
++ The histograms below confirm that both the batting & pitching home-run variables are bimodal as well as the batting strike-out variable.
+
++ Many variables have significant right skews.
+
++ TEAM_BATTING_BB & TEAM_FIELDING_DP are left-skewed.
+
++ The distributions for TEAM_BATTING_HBP, TEAM_BASERUN_CS & TEAM_FIELDING_DP are centered away from zero, so it seems unlikely that all the `NA`s are mislabelled zero values.
+
+```{r hist, fig.width = 10, fig.height = 10, echo=F}
+hist.data.frame(train_raw)
+```
+
+
+### Correlations
+
++ In the correlation table and plot below, we see 4 pairs of highly correlated variables. They are corresponding metrics for batting and pitching: home runs, walks, strike outs & hits (rows 1-4). These may present multicollinearity issues in our modeling.
+
++ Rows 8 to 11 show batting & pitching hits and walks are moderately correlated to our response variable. Let's consider using them for one our models.
+
+```{r fig.width = 10, fig.height = 11, echo=F}
+cormatrix <- cor(drop_na(train_raw))
+
+#find the top correlations
+cor_df <- data.frame(Var1=rownames(cormatrix)[row(cormatrix)],
+                     Var2=colnames(cormatrix)[col(cormatrix)],
+                     Correlation=c(cormatrix))
+
+
+corr_list <- 
+  cor_df %>% 
+  filter(Var1 != Var2) %>% 
+  arrange(-Correlation)
+
+#dedupe the rows
+sort_rows <- t(apply(corr_list, 1, sort, decreasing = T))
+fin_list <- corr_list[!duplicated(sort_rows), ]
+rownames(fin_list) <- 1:nrow(fin_list)
+#print table
+kable(head(fin_list, 12), digits=4, row.names = T, caption = "Top 12 Correlated Variable Pairs")
+
+#https://stackoverflow.com/questions/28035001/transform-correlation-matrix-into-dataframe-with-records-for-each-row-column-pai
+
+#plot
+corrplot(cormatrix, method = "square", type = "upper")
+
+```
+
+
+
+#2. DATA PREPARATION
+
+## Creating Bins
+
+From the histograms and summary statitics, TEAM_PITCHING_H seems to have the extreme outliers, so let's put these values into quintile bins to mitigate their effect.
+
+
+```{r bins}
+train_raw$TEAM_PITCHING_H <- bin_data(train_raw$TEAM_PITCHING_H, bins = 5, binType = "quantile") 
+
+levels(train_raw$TEAM_PITCHING_H) <- c("One","Two","Three","Four","Five")
+
+```
+
+
+
+
+
+## Missing Value Imputation
+
+Let's use the missForest package to do nonparametric missing-value imputation using Random Forest.
+
+First, let's try leaving in TEAM_BATTING_HPB, even though it has all of those `NA`s.
+
+**When we check the out-of-the-bag error, we would like to the normalized root mean-squares error (NRMSE) near zero, which would indicate a well-fitted imputation. However, as suspected, the normalized root mean-squares error (NRMSE) for TEAM_BATTING_HBP is nearly twice as large as the next highest NRMSE. Let's remove it and impute the missing values again.**
+
+[Source: Accuracy and Errors for Models](http://rcompanion.org/handbook/G_14.html)
+
+```{r impute, echo=F}
+impute_missing <- missForest(train_raw, variablewise = T)
+ 
+# check imputation error
+impute_df <- cbind(meta_df, 
+                   range = metrics_df$range,
+                   MSE = as.numeric(impute_missing$OOBerror),
+                   variable = names(impute_missing$ximp)) %>% 
+  select(variable, NA_ct, NA_pct, MSE) %>% 
+  mutate(RMSE = sqrt(as.numeric(impute_missing$OOBerror)),
+         NRMSE = sqrt(as.numeric(impute_missing$OOBerror))/metrics_df$range) %>% 
+  filter(MSE > 0) %>% 
+  arrange(-NRMSE)
+
+kable(impute_df, digits = 2) 
+```
+
+
+
+**The remaining 5 imputed variables have NRMSE values have better fits and range from .02 to .11.**
+
+
+```{r impute2, echo=F}
+train_raw_less_one <- select(train_raw, -TEAM_BATTING_HBP)
+impute_missing <- missForest(train_raw_less_one, variablewise = T)
+ 
+# check imputation error
+impute_df <- cbind(metadata(train_raw_less_one), 
+                   range = rapply(impute_missing$ximp, max) - rapply(impute_missing$ximp, min),
+                   MSE = as.numeric(impute_missing$OOBerror),
+                   variable = names(impute_missing$ximp)) %>% 
+  select(variable, NA_ct, NA_pct, MSE) %>% 
+  mutate(RMSE = sqrt(as.numeric(impute_missing$OOBerror)),
+         NRMSE = sqrt(as.numeric(impute_missing$OOBerror))/(rapply(impute_missing$ximp, max) - rapply(impute_missing$ximp, min))) %>% 
+  filter(MSE > 0) %>% 
+  arrange(-NRMSE)
+
+kable(impute_df, digits = 2)
+
+train_imputed <- impute_missing$ximp 
+``` 
+
+#3. BUILD MODELS
+
+## Model 1: All Variables
+
+First, let's build a model with all variables.
+
+```{r mod1, echo=F}
+class(train_imputed$TEAM_PITCHING_H) <- "factor"
+
+mod1 <- lm(TARGET_WINS ~ ., data = train_imputed)
+
+summary(mod1) 
+```
+
+
+In the model output above, we notice the following:
+
++ Of the 14 continuous & intercept variables, 9 have statistically significant p-values at the 5% significance level. In the 3rd model, we will explore which of the variables are actually necessary to a parsimonious model.
+
++ Only 2 out of the 4 TEAM_PITCHING_H quintile dummy variables are statistically significant, so let's check an ANOVA summary to make sure that the group means are significantly different. The F-statistic's p-value is near zero, so we would reject the null hypothesis that the means are equal and keep the dummy variables in the model. 
+
+```{r, echo=F}
+summary(aov(TARGET_WINS~TEAM_PITCHING_H, data = train_imputed))
+```
+
+
++ While we would expect negative coefficients for Fielding Errors, Walks Allowed & Batting Strikeouts, we wouldn't expect negative values for Double Plays & Batting Doubles. Additionally, it's surprising that Caught Stealing & Home Runs Allowed do not have negative coefficients. While none of the variables are perfectly collinear and were automatically removed from the model, these unexpected signs may indicate that we have some.
+
++ At 0.3602, the adjusted $R^2$ is not as high as we would prefer, and it indicates that only 36% of the variance in the response variable can be explained by the predictor variables.
+
++ At 75, the F-statistic is large, and the model's p-value is near zero. If the model's diagnostics are sufficient, these values indicate that we would reject the null hypothesis that there is no relationship between the explanatory & response variables.
+
+## Model 2: Only Highly Correlated Variables
+
+From our Correlated Variable Pairs table, let's use only the 4 explanatory variables that were most correlated with the response variable. 
+
+```{r mod2, echo=F}
+filter(fin_list, Var2 == "TARGET_WINS")[1:4,]
+
+mod2 <- lm(TARGET_WINS ~ TEAM_PITCHING_H + TEAM_BATTING_H + TEAM_BATTING_BB + TEAM_PITCHING_BB, data = train_imputed)
+
+summary(mod2)
+```
+
+In the Model #2 output above, we notice the following:
+
++ All 3 continuous variables are statistically significant, but this time the intercept is not.
+
++ Only 1 of the 4 TEAM_PITCHING_H dummy variables is statistically significant. 
+
++ We would expect a negative coefficient for Walks Allowed and positive ones for Batting Walks & Batting Hits. However, 1 of the 4 Hits Allowed dummy variables does not have a negative coefficient, and this unexpected coefficient sign may indicate that we still have some collinearity.
+
++ At 0.2251, the adjusted $R^2$ indicates that this model explains less of variance in the response variable than Model #1.
+
++ At 95, the F-statistic is larger than model #1, and the model's p-value is near zero. If the model's diagnostics are sufficient, these values indicate that we would reject the null hypothesis that there is no relationship between the explanatory & response variables.
+
+## Model 3: Backwards Elimination
+
++ Let's start with Model #1, but let's remove the 4 variables that appeared to have multicollinearity issues because of their unexpected coefficient signs. 
+
++ Then we will remove one variable at a time by greatest coefficient p-value until we have a parsimonious model with only statistically significant variables.
+
++ Along the way, we will take note if the removal of a variable causes a significant changes in adjusted R-squared and coefficient estimates.
+
++ Lastly, TEAM_PITCHING_SO was removed because it didn't have the expected sign. 
+ 
+```{r mod3, echo=F}
+
+mod3 <- update(mod1, .~. -TEAM_FIELDING_DP -TEAM_BATTING_2B -TEAM_BASERUN_CS -TEAM_PITCHING_HR, data = train_imputed)
+#summary(mod3) #R-sq = 0.334 
+
+#remove TEAM_PITCHING_BB at 0.598258 
+mod3 <- update(mod3, .~. -TEAM_PITCHING_BB, data = train_imputed)
+#summary(mod3) #new R-sq = 0.3342
+
+#remove TEAM_BATTING_BB at 0.169551
+mod3 <- update(mod3, .~. -TEAM_BATTING_BB, data = train_imputed)
+#summary(mod3) #new R-sq = 0.3341
+
+#remove TEAM_PITCHING_H  
+mod3 <- update(mod3, .~. -TEAM_PITCHING_H, data = train_imputed)
+#summary(mod3) #new R-sq = 0.3284
+
+#remove TEAM_PITCHING_SO, it appears collinear  
+mod3 <- update(mod3, .~. -TEAM_PITCHING_SO, data = train_imputed)
+#summary(mod3) #new R-sq = 0.3273
+
+#remove TEAM_BATTING_3B,  
+mod3 <- update(mod3, .~. -TEAM_BATTING_3B, data = train_imputed)
+summary(mod3) #new R-sq = 0.3273
+
+```
+
+In the Model #3 output above, we notice the following:
+
++ All 5 continuous variables & and the intercept are statistically significant. Their p-values are near zero.
+
++ Unlike the previous models, we do not have any unexpected coefficient signs, which means that we have removed at least some of the multilinearity.
+
++ At 0.3258, the adjusted $R^2$ indicates that this model explains 33% of the variance in the response variable.
+
++ At 221, the F-statistic is larger than the other 2 models, and the model's p-value is near zero. If the model's diagnostics are sufficient, these values indicate that we would reject the null hypothesis that there is no relationship between the explanatory & response variables.
+
+
+
+#4. SELECT MODEL
+
+## Evaluation
+
+The table below summarizes the 3 models. 
+
++ While Model #1 has the highest adjusted R-squared, it also had 5 variables that were not statistically significant, and 4 variables with unexpected signs, which indicated multicollinearity issues. 
+
++ Model #2 used fewer variables, but the intercept coefficient was not statistically significant. We also saw some evidence of collinearity.
+
++ **Of the 3, Model #3 is the best.** Removing the non-significant and collinear variables makes it more parsimonious with an adjusted R-squared that is less than Model #1 but much greater than Model #2. This model's F-statistic is also significantly larger than the other 2. Additionally, the difference between Model #3's predicted R-squared and R-squared is smaller than the other models, giving us more confidence that the model is not overfit.
+
+
+```{r compare, echo=F}
+
+PRESS <- function(linear.model) {
+  #source:  https://gist.github.com/tomhopper/8c204d978c4a0cbcb8c0#file-press-r
+  #' calculate the predictive residuals
+  pr <- residuals(linear.model)/(1-lm.influence(linear.model)$hat)
+  #' calculate the PRESS
+  PRESS <- sum(pr^2)
+  
+  return(PRESS)
+}
+pred_r_squared <- function(linear.model) {
+  #source: https://gist.github.com/tomhopper/8c204d978c4a0cbcb8c0#file-pred_r_squared-r
+  #' Use anova() to get the sum of squares for the linear model
+  lm.anova <- anova(linear.model)
+  #' Calculate the total sum of squares
+  tss <- sum(lm.anova$'Sum Sq')
+  # Calculate the predictive R^2
+  pred.r.squared <- 1-PRESS(linear.model)/(tss)
+  
+  return(pred.r.squared)
+}
+
+
+model_summary <- function(model, y_var) {
+    ### Summarizes the model's key statistics in one row
+    df_summary <- glance(summary(model))
+    model_name <- deparse(substitute(model))
+    n_predictors <- ncol(model$model) - 1
+    pred.r.squared <- pred_r_squared(model)
+    df_summary <- cbind(model_name, n_predictors, pred.r.squared, df_summary)
+    return(df_summary)
+}
+mod_sum_df1 <- model_summary(mod1, "TARGET_WINS")
+mod_sum_df2 <- model_summary(mod2, "TARGET_WINS")
+mod_sum_df3 <- model_summary(mod3, "TARGET_WINS")
+
+kable(all_results <- rbind(mod_sum_df1, mod_sum_df2, mod_sum_df3), digits = 4)
+```
+
+##Residual Plots
+
++ In the Q-Q plot, we see some deviations for the normal distribution at the ends. Some of the extreme cases have been labeled. However, as the LMR text suggests, perhaps we can relax the normality assumption since we have more than 2200 observations.
+
++ In the residuals-fitted and standardzied residuals-fitted plots, the best fitted line has a curve in the main cluster, which indicates that we do not have constant variance.
+
++ Ideally, prior to making any inferences, we would want to attempt to transform the data in order to better meet the regression assumptions.
+
+
+```{r plot, echo=F}
+par(mfrow=c(2,2))
+plot(mod3)
+```
+
+
+## Test Model
+
+### Explore
+
+Let's load the data, and look at our `NA` rates.
+
+```{r explore, echo=F}
+kable(metadata(test_raw), digits = 1)
+
+```
+
+### Transform & Impute Missing Values
+
+We see similar patterns of missing values, so  let's do the following:
+
++ bin TEAM_PITCHING_H 
++ drop the sparsely populated TEAM_BATTING_HBP
++ and impute the missing values
+
+Since we have fewer cases, the NRMSE values are a little higher with the test data.
+
+```{r imput_test, echo=F}
+test_raw$TEAM_PITCHING_H <- bin_data(test_raw$TEAM_PITCHING_H, bins = 5, binType = "quantile") 
+
+levels(test_raw$TEAM_PITCHING_H) <- c("One","Two","Three","Four","Five")
+
+test_raw_less_one <- select(test_raw, -TEAM_BATTING_HBP)
+
+impute_missing_test <- missForest(test_raw_less_one, variablewise = T)
+ 
+# check imputation error
+impute_df <- cbind(metadata(test_raw_less_one), 
+                   range = rapply(impute_missing_test$ximp, max) - rapply(impute_missing_test$ximp, min),
+                   MSE = as.numeric(impute_missing_test$OOBerror),
+                   variable = names(impute_missing_test$ximp)
+                   ) %>% 
+  select(variable, NA_ct, NA_pct, MSE) %>% 
+  mutate(RMSE = sqrt(as.numeric(impute_missing_test$OOBerror)),
+         NRMSE = sqrt(as.numeric(impute_missing_test$OOBerror))/(rapply(impute_missing_test$ximp, max) - rapply(impute_missing_test$ximp, min))) %>% 
+  filter(MSE > 0) %>% 
+  arrange(-NRMSE)
+
+kable(impute_df, digits = 2)
+
+test_imputed <- impute_missing$ximp 
+class(test_imputed$TEAM_PITCHING_H) <- "factor"
+```
+### Predict
+```{r predict}
+test_results <- predict(mod3, newdata = test_imputed)
+```
+
+
+
+#Code Appendix
+```{r appendix, ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE}
+```

@@ -1,0 +1,74 @@
+---
+title: "Imputation Test Using missForest"
+author: "Kyle Gilde"
+date: "March 4, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r cars}
+#required packages
+packages <- c("kableExtra", "reshape2", "knitr", "tidyverse", "DMwR","Hmisc", "data.table", "missForest", "mltools", "htmlTable", "broom", "MLmetrics") 
+
+#see if we need to install any of them
+installed_and_loaded <- function(pkg){
+  #CODE SOURCE: https://gist.github.com/stevenworthington/3178163
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg)) install.packages(new.pkg, dependencies = TRUE)
+  sapply(pkg, require, character.only = TRUE, quietly = TRUE, warn.conflicts = FALSE)
+}
+
+#excute function and display the loaded packages
+data.frame(installed_and_loaded(packages))
+
+```
+
+#Read & Transform
+
+```{r pressure, echo=FALSE}
+
+BaseballDf <- read.csv("https://raw.githubusercontent.com/akulapa/Data621-Week05-Discussion/master/moneyball-training-data.csv", header= TRUE, stringsAsFactors = F)
+BaseballDf$TEAM_BATTING_1B = BaseballDf$TEAM_BATTING_H - BaseballDf$TEAM_BATTING_2B - BaseballDf$TEAM_BATTING_3B - BaseballDf$TEAM_BATTING_HR
+
+BaseballDf_o <- BaseballDf %>% 
+  select(TARGET_WINS, TEAM_BATTING_2B,TEAM_BATTING_3B,TEAM_BATTING_HR,TEAM_BATTING_BB,TEAM_BATTING_SO,TEAM_BASERUN_SB,TEAM_PITCHING_H,TEAM_PITCHING_SO,TEAM_FIELDING_E,TEAM_FIELDING_DP,TEAM_BATTING_1B)
+
+BaseballDf_o[!complete.cases(BaseballDf_o),] %>% 
+  kable("html",caption = "Rows With Missing Values") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F, position = "left", font_size = 12) %>%
+  scroll_box(width = "100%", height = "200px")
+```
+
+```{r}
+options(scipen=10, digits=10)
+
+set.seed(100)
+BaseballDf_NA <- BaseballDf_o[complete.cases(BaseballDf_o),]
+BaseballDf_NA[sample(1:nrow(BaseballDf_NA), 40), "TEAM_BATTING_SO"] <- NA
+
+missing.row <- BaseballDf_NA[!complete.cases(BaseballDf_NA),]
+
+BaseballDf_NA[!complete.cases(BaseballDf_NA),] %>% 
+  kable("html",caption = "Manually Updated NA Rows") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F, position = "left", font_size = 12) %>%
+  scroll_box(width = "100%", height = "200px")
+```
+
+
+
+
+```{r}
+
+impute_missing <- missForest(BaseballDf_NA, variablewise = T)$ximp 
+
+actuals <- BaseballDf_o[rownames(missing.row),]$TEAM_BATTING_SO
+predicteds <- impute_missing[rownames(missing.row),]$TEAM_BATTING_SO
+regr.eval(actuals, predicteds)
+
+
+```
+
