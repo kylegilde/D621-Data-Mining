@@ -1,8 +1,8 @@
 ---
 title: "DATA 621 Business Analytics & Data Mining" 
-subtitle: "Homework #2 Classification Metrics"
+subtitle: "Homework #3 Binary Logistic Regression"
 author: "Kyle Gilde"
-date: "3/11/2018"
+date: "3/31/2018"
 output: 
   prettydoc::html_pretty:
     theme: cayman
@@ -33,7 +33,7 @@ installed_and_loaded <- function(pkg){
   sapply(pkg, require, character.only = TRUE, quietly = TRUE, warn.conflicts = FALSE)
 }
 
-# required packages
+# requi/red packages
 packages <- c("prettydoc","tidyverse", "caret", "pROC", "zoo") 
 
 #excute function and display the loaded packages
@@ -41,316 +41,500 @@ data.frame(installed_and_loaded(packages))
 ```
 # Overview
 
-In this homework assignment, you will work through various classification metrics. You will be asked to create functions in R to carry out the various calculations. You will also investigate some functions in packages that will let you obtain the equivalent results. Finally, you will create graphical output that also can be used to evaluate the output of classification models, such as binary logistic regression.
+In this homework assignment, you will explore, analyze and model a data set containing information on crime for various neighborhoods of a major city. Each record has a response variable indicating whether or not the crime rate is above the median crime rate (1) or not (0). 
+
+Your objective is to build a binary logistic regression model on the training data set to predict whether the neighborhood will be at risk for high crime levels. You will provide classifications and probabilities for the evaluation data set using your binary logistic regression model. You can only use the variables given to you (or, variables that you derive from the variables provided). Below is a short description of the variables of interest in the data set:
 
 # Deliverables
 
-Upon following the instructions below, use your created R functions and the other packages to generate the classification metrics for the provided data set. A write-up of your solutions submitted in PDF format.
+A write-up submitted in PDF format. Your write-up should have four sections. Each one is described below. You may assume you are addressing me as a fellow data scientist, so do not need to shy away from technical details. Assigned prediction (probabilities, classifications) for the evaluation data set. Use 0.5 threshold. Include your R statistical programming code in an Appendix.
 
 # Instructions
 
-**Complete each of the following steps as instructed:**
+## 1. DATA EXPLORATION
 
-1. Download the classification output data set (attached in Blackboard to the assignment).
+
 
 ```{r getdata}
 
-class_df <- read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW2%20Classification%20Metrics/classification-output-data.csv")
+train_data <- read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW3%20Binary%20Logistic%20Regression/crime-training-data_modified.csv")
 
-```
+eval_data <- read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW3%20Binary%20Logistic%20Regression/crime-evaluation-data_modified.csv")
 
-2. The data set has three key columns we will use:
-
-+ class: the actual class for the observation 
-
-+ scored.class: the predicted class for the observation (based on a threshold of 0.5) 
-
-+ scored.probability: the predicted probability of success for the observation
-
-Use the table() function to get the raw confusion matrix for this scored dataset. Make sure you
-understand the output. In particular, do the rows represent the actual or predicted class? The
-columns?
-
-**In the confusion matrix below, the rows represent the predicted classes, and the columns represent the actual classes.**
-
-```{r table}
-
-class_vars <- subset(class_df, select = c(scored.class, class))
-
-table(class_vars)
 
 ```
 
 
-3. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the accuracy of the predictions.
 
-```{r Q3}
+## Non-visual exploration
 
-accuracy_calc <- function(df){
-  # Takes a 2-column df where the 1st column is the predicted class
-  # The 2nd column is the actual class (0 or 1)
-  # Calculates the number of true positives & negatives
-  # Returns the accuracy rate, the proportion of true predictions
-  TP <- sum(df[, 2] == 1 & df[, 1] == 1)
-  TN <- sum(df[, 2] == 0 & df[, 1] == 0)
-  (TP + TN)/nrow(df)
+
+![](https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW1%20Moneyball/data-dictionary.PNG)
+
+**The data set contains 15 explanatory variables, and they can be categorized into four  groups:**
+
+1. 7 batting metrics
+
+2. 2 baserunning metrics
+
+3. 2 fielding metrics
+
+4. 4 pitching metrics
+
+###Data Inspection
+
+Let's take a look at the data's non-statistical aspects.
+
+
++ In the table below, we that the data set contains all integers.
+
++ The data set has less than 10% complete cases. 
+
++ Six variables are missing values with TEAM_BATTING_HBP, TEAM_BASERUN_CS & TEAM_FIELDING_DP being the most sparse with 92%, 34% & 13% `NA`s, respectively. 
+
++ We will have to drop them or try to impute the missing values.
+
+
+```{r meta, echo=F, fig.width = 10}
+str(train_data)
+
+summary(train_data)
+
+train_data$chas <- as.factor(train_data$chas)
+
+metadata <- function(df){
+  #Takes a data frame & Checks NAs, class types, inspects the unique values
+  df_len <- nrow(df)
+  NA_ct = as.vector(rapply(df, function(x) sum(is.na(x))))
+
+  #create dataframe  
+  df_metadata <- data.frame(
+    vars = names(df),
+    class_type = rapply(lapply(df, class), function(x) x[[1]]),
+    n_rows = rapply(df, length),
+    complete_cases = sum(complete.cases(df)),
+    NA_ct = NA_ct,
+    NA_pct = NA_ct / df_len * 100,
+    unique_value_ct = rapply(df, function(x) length(unique(x))),
+    most_common_values = rapply(df, function(x) str_replace(paste(names(sort(summary(as.factor(x)), decreasing=T))[1:5], collapse = '; '), "\\(Other\\); ", ""))
+  )
+ rownames(df_metadata) <- NULL
+ return(df_metadata)
 }
 
+meta_df <- metadata(train_raw)
 
-(accuracy_value <- accuracy_calc(class_vars))
+
+kable(meta_df, digits = 1) 
 ```
 
 
 
-4. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the classification error rate of the predictions.
+###Statistical Summary
 
-```{r Q4}
-
-classification_error_rate <- function(df){
-  # Takes a 2-column df where the 1st column is the predicted class
-  # The 2nd column is the actual class (0 or 1)
-  # Calculates the number of false positives & negatives
-  # Returns the classification error rate, the proportion of false predictions
-  FP <- sum(df[, 2] == 0 & df[, 1] == 1)
-  FN <- sum(df[, 2] == 1 & df[, 1] == 0)
-  (FP + FN)/nrow(df)
-}
-
-(cer <- classification_error_rate(class_vars))
-```
-
-Verify that you get an accuracy and an error rate that sums to one. 
-
-**They do sum to 1.**
-
-```{r Q4b}
-
-cer + accuracy_value == 1
-```
-
-5. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the precision of the predictions.
-
-
-```{r Q5}
-
-precision_calc <- function(df){
-  # Takes a 2-column df where the 1st column is the predicted class
-  # The 2nd column is the actual class (0 or 1)
-  # Calculates the number of true & false positives
-  # Returns the precision rate, the proportion of the predicted positives that were true
-  TP <- sum(df[, 2] == 1 & df[, 1] == 1)
-  FP <- sum(df[, 2] == 0 & df[, 1] == 1)
-  TP/(TP + FP)
-}
-
-(precision_value <- precision_calc(class_vars))
-```
-
-
-6. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the sensitivity of the predictions. Sensitivity is also known as recall.
-
-```{r Q6}
-
-sensitivity_calc <- function(df, threshold = .5){
-  # Takes a 2-column df
-  # The 1st column is either the predicted class (0 or 1) or the predicted class probablity
-  # The default class threshold is .5
-  # & it works with either the predicted class (0 or 1) or the predicted class probablity in column 1 
-  # The 2nd column is the actual class (0 or 1)
-  # Calculates the number of true positives & false negatives
-  # Returns the sensitivity rate
-  # AKA the true positive rate, the recall, or probability of detection,
-  # the proportion of correctly identified positives
-  TP <- sum(df[, 1] > threshold & df[, 2] == 1)
-  FN <- sum(df[, 1] <= threshold & df[, 2] == 1)
-  TP/(TP + FN)
-}
-
-(sensitivity_value <- sensitivity_calc(class_vars))
-```
-
-
-7. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the specificity of the predictions.
-
-```{r Q7}
-specificity_calc <- function(df, threshold = .5){
-  # Takes a 2-column df
-  # The 1st column is either the predicted class (0 or 1) or the predicted class probablity
-  # The default class threshold is .5
-  # & it works with either the predicted class (0 or 1) or the predicted class probablity in column 1 
-  # The 2nd column is the actual class (0 or 1)
-  # Calculates the number of true positives & false negatives
-  # Returns the specificity rate, 
-  # AKA the true negative rate & the proportion of correctly identified negatives
-  TN <- sum(df[, 1] <= threshold & df[, 2] == 0)
-  FP <- sum(df[, 1] > threshold & df[, 2] == 0)
-  TN/(TN + FP)
-}
-
-(specificity_value <- specificity_calc(class_vars))
-
-```
-
-8. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the F1 score of the predictions.
-
-```{r Q8}
-
-F1_score_calc <- function(df){
-  # Takes a 2-column df where the 1st column is the predicted class
-  # The 2nd column is the actual class
-  # Calculates the precision & sensitivity
-  # Returns the F1 score
-  precision_value <- precision_calc(class_vars)
-  sensitivity_value <- sensitivity_calc(class_vars)
-  (2 * precision_value * sensitivity_value)/(precision_value + sensitivity_value)
-}
-
-(F1_score_value <- F1_score_calc(class_vars))
-
-```
-
-
-9. Before we move on, let's consider a question that was asked: What are the bounds on the F1 score? Show that the F1 score will always be between 0 and 1.
-
-
-```{r Q9}
-set.seed(5)
-n_sims <- 100000
-
-# Create a 3 column matrix representing true positive, false positive & false negative values
-some_possible_inputs <- data.frame(
-  a = c(runif(n_sims), 0, 1),
-  b = c(runif(n_sims), 0, 1),
-  c = c(runif(n_sims), 0, 1)
-)
-
-F1_score_generator <- function(df){
-  # Takes a 3-column df of true positive, false positive & false negative values
-  # Calculates the precision & sensitivity
-  # Returns a vector of the F1 scores
+```{r stats, echo=F}
+metrics <- function(df){
+  ###Creates summary metrics table
+  metrics_only <- df[, which(rapply(lapply(df, class), function(x) x[[1]]) %in% c("numeric", "integer"))]
   
-  precision_values <- mapply(function(TP, FP) TP/(TP + FP), df[, 1], df[, 2])
-  sensitivity_values <- mapply(function(TP, FN) TP/(TP + FN), df[, 1], df[, 3])
+  df_metrics <- psych::describe(metrics_only, quant = c(.25,.75))
   
-  (2 * precision_values * sensitivity_values)/(precision_values + sensitivity_values)
+  df_metrics <- 
+    dplyr::select(df_metrics, n, min, Q.1st = Q0.25, median, mean, Q.3rd = Q0.75, 
+    max, range, sd, se, skew, kurtosis
+  )
+  
+  return(df_metrics)
+}
+
+metrics_df <- metrics(train_raw)
+
+kable(metrics_df, digits = 1, format.args = list(big.mark = ',', scientific = F, drop0trailing = T))
+```
+
+
+
+## Visual Exploration
+
+### Boxplots
+
++ In the boxplots below, we see that the variance of some of the explanatory variables greatly exceeds the variance of the response games-won variable. 
+
++ According to the summary statistics table above, the TARGET_WIN's standard deviation is the 2nd smallest of all the variables.
+
++ A few of them have so many outliers that we may be dealing with non-unimodal distributions.
+
++ The data set has 193 observations that are more extreme than the 1.5 * IQR of the boxplot whiskers. 
+
+```{r box, echo=F}
+#calculate some parameters to deal with the outliers
+train_stacked <- na.omit(stack(train_raw))
+bpstats <- boxplot(values ~ ind, data = train_stacked, plot = F)$stats
+ylimits <- c(0, ceiling(max(bpstats) / 200)) * 200
+ybreaks <- seq(ylimits[1], ylimits[2], by = 200)
+outliers_not_shown <- paste(sum(train_stacked$values > max(ylimits)), "outlier(s) not displayed")
+
+ggplot(data = train_stacked, mapping = aes(x = ind, y = values)) + 
+  geom_boxplot(outlier.size = 1) +
+  labs(caption = paste("Red dot = mean", outliers_not_shown, sep = "\n")) +
+  scale_x_discrete(limits = rev(levels(train_stacked$ind))) +
+  scale_y_continuous(breaks = ybreaks) +
+  stat_summary(fun.y=mean, geom="point", size=2, color = "red") +
+  coord_flip(ylim = ylimits) +
+  theme_fivethirtyeight()
+
+
+```
+
+### Histograms
+
++ The histograms below confirm that both the batting & pitching home-run variables are bimodal as well as the batting strike-out variable.
+
++ Many variables have significant right skews.
+
++ TEAM_BATTING_BB & TEAM_FIELDING_DP are left-skewed.
+
++ The distributions for TEAM_BATTING_HBP, TEAM_BASERUN_CS & TEAM_FIELDING_DP are centered away from zero, so it seems unlikely that all the `NA`s are mislabelled zero values.
+
+```{r hist, fig.width = 10, fig.height = 10, echo=F}
+hist.data.frame(train_raw)
+```
+
+
+### Correlations
+
++ In the correlation table and plot below, we see 4 pairs of highly correlated variables. They are corresponding metrics for batting and pitching: home runs, walks, strike outs & hits (rows 1-4). These may present multicollinearity issues in our modeling.
+
++ Rows 8 to 11 show batting & pitching hits and walks are moderately correlated to our response variable. Let's consider using them for one our models.
+
+```{r fig.width = 10, fig.height = 11, echo=F}
+cormatrix <- cor(drop_na(train_raw))
+
+#find the top correlations
+cor_df <- data.frame(Var1=rownames(cormatrix)[row(cormatrix)],
+                     Var2=colnames(cormatrix)[col(cormatrix)],
+                     Correlation=c(cormatrix))
+
+
+corr_list <- 
+  cor_df %>% 
+  filter(Var1 != Var2) %>% 
+  arrange(-Correlation)
+
+#dedupe the rows
+sort_rows <- t(apply(corr_list, 1, sort, decreasing = T))
+fin_list <- corr_list[!duplicated(sort_rows), ]
+rownames(fin_list) <- 1:nrow(fin_list)
+#print table
+kable(head(fin_list, 12), digits=4, row.names = T, caption = "Top 12 Correlated Variable Pairs")
+
+#https://stackoverflow.com/questions/28035001/transform-correlation-matrix-into-dataframe-with-records-for-each-row-column-pai
+
+#plot
+corrplot(cormatrix, method = "square", type = "upper")
+
+```
+
+
+
+#2. DATA PREPARATION
+
+## Creating Bins
+
+From the histograms and summary statitics, TEAM_PITCHING_H seems to have the extreme outliers, so let's put these values into quintile bins to mitigate their effect.
+
+
+```{r bins}
+train_raw$TEAM_PITCHING_H <- bin_data(train_raw$TEAM_PITCHING_H, bins = 5, binType = "quantile") 
+
+levels(train_raw$TEAM_PITCHING_H) <- c("One","Two","Three","Four","Five")
+
+```
+
+
+
+
+
+## Missing Value Imputation
+
+Let's use the missForest package to do nonparametric missing-value imputation using Random Forest.
+
+First, let's try leaving in TEAM_BATTING_HPB, even though it has all of those `NA`s.
+
+**When we check the out-of-the-bag error, we would like to the normalized root mean-squares error (NRMSE) near zero, which would indicate a well-fitted imputation. However, as suspected, the normalized root mean-squares error (NRMSE) for TEAM_BATTING_HBP is nearly twice as large as the next highest NRMSE. Let's remove it and impute the missing values again.**
+
+[Source: Accuracy and Errors for Models](http://rcompanion.org/handbook/G_14.html)
+
+```{r impute, echo=F}
+impute_missing <- missForest(train_raw, variablewise = T)
+ 
+# check imputation error
+impute_df <- cbind(meta_df, 
+                   range = metrics_df$range,
+                   MSE = as.numeric(impute_missing$OOBerror),
+                   variable = names(impute_missing$ximp)) %>% 
+  select(variable, NA_ct, NA_pct, MSE) %>% 
+  mutate(RMSE = sqrt(as.numeric(impute_missing$OOBerror)),
+         NRMSE = sqrt(as.numeric(impute_missing$OOBerror))/metrics_df$range) %>% 
+  filter(MSE > 0) %>% 
+  arrange(-NRMSE)
+
+kable(impute_df, digits = 2) 
+```
+
+
+
+**The remaining 5 imputed variables have NRMSE values have better fits and range from .02 to .11.**
+
+
+```{r impute2, echo=F}
+train_raw_less_one <- select(train_raw, -TEAM_BATTING_HBP)
+impute_missing <- missForest(train_raw_less_one, variablewise = T)
+ 
+# check imputation error
+impute_df <- cbind(metadata(train_raw_less_one), 
+                   range = rapply(impute_missing$ximp, max) - rapply(impute_missing$ximp, min),
+                   MSE = as.numeric(impute_missing$OOBerror),
+                   variable = names(impute_missing$ximp)) %>% 
+  select(variable, NA_ct, NA_pct, MSE) %>% 
+  mutate(RMSE = sqrt(as.numeric(impute_missing$OOBerror)),
+         NRMSE = sqrt(as.numeric(impute_missing$OOBerror))/(rapply(impute_missing$ximp, max) - rapply(impute_missing$ximp, min))) %>% 
+  filter(MSE > 0) %>% 
+  arrange(-NRMSE)
+
+kable(impute_df, digits = 2)
+
+train_imputed <- impute_missing$ximp 
+``` 
+
+#3. BUILD MODELS
+
+## Model 1: All Variables
+
+First, let's build a model with all variables.
+
+```{r mod1, echo=F}
+class(train_imputed$TEAM_PITCHING_H) <- "factor"
+
+mod1 <- lm(TARGET_WINS ~ ., data = train_imputed)
+
+summary(mod1) 
+```
+
+
+In the model output above, we notice the following:
+
++ Of the 14 continuous & intercept variables, 9 have statistically significant p-values at the 5% significance level. In the 3rd model, we will explore which of the variables are actually necessary to a parsimonious model.
+
++ Only 2 out of the 4 TEAM_PITCHING_H quintile dummy variables are statistically significant, so let's check an ANOVA summary to make sure that the group means are significantly different. The F-statistic's p-value is near zero, so we would reject the null hypothesis that the means are equal and keep the dummy variables in the model. 
+
+```{r, echo=F}
+summary(aov(TARGET_WINS~TEAM_PITCHING_H, data = train_imputed))
+```
+
+
++ While we would expect negative coefficients for Fielding Errors, Walks Allowed & Batting Strikeouts, we wouldn't expect negative values for Double Plays & Batting Doubles. Additionally, it's surprising that Caught Stealing & Home Runs Allowed do not have negative coefficients. While none of the variables are perfectly collinear and were automatically removed from the model, these unexpected signs may indicate that we have some.
+
++ At 0.3602, the adjusted $R^2$ is not as high as we would prefer, and it indicates that only 36% of the variance in the response variable can be explained by the predictor variables.
+
++ At 75, the F-statistic is large, and the model's p-value is near zero. If the model's diagnostics are sufficient, these values indicate that we would reject the null hypothesis that there is no relationship between the explanatory & response variables.
+
+## Model 2: Only Highly Correlated Variables
+
+From our Correlated Variable Pairs table, let's use only the 4 explanatory variables that were most correlated with the response variable. 
+
+```{r mod2, echo=F}
+filter(fin_list, Var2 == "TARGET_WINS")[1:4,]
+
+mod2 <- lm(TARGET_WINS ~ TEAM_PITCHING_H + TEAM_BATTING_H + TEAM_BATTING_BB + TEAM_PITCHING_BB, data = train_imputed)
+
+summary(mod2)
+```
+
+In the Model #2 output above, we notice the following:
+
++ All 3 continuous variables are statistically significant, but this time the intercept is not.
+
++ Only 1 of the 4 TEAM_PITCHING_H dummy variables is statistically significant. 
+
++ We would expect a negative coefficient for Walks Allowed and positive ones for Batting Walks & Batting Hits. However, 1 of the 4 Hits Allowed dummy variables does not have a negative coefficient, and this unexpected coefficient sign may indicate that we still have some collinearity.
+
++ At 0.2251, the adjusted $R^2$ indicates that this model explains less of variance in the response variable than Model #1.
+
++ At 95, the F-statistic is larger than model #1, and the model's p-value is near zero. If the model's diagnostics are sufficient, these values indicate that we would reject the null hypothesis that there is no relationship between the explanatory & response variables.
+
+## Model 3: Backwards Elimination
+
++ Let's start with Model #1, but let's remove the 4 variables that appeared to have multicollinearity issues because of their unexpected coefficient signs. 
+
++ Then we will remove one variable at a time by greatest coefficient p-value until we have a parsimonious model with only statistically significant variables.
+
++ Along the way, we will take note if the removal of a variable causes a significant changes in adjusted R-squared and coefficient estimates.
+
++ Lastly, TEAM_PITCHING_SO was removed because it didn't have the expected sign. 
+ 
+```{r mod3, echo=F}
+
+mod3 <- update(mod1, .~. -TEAM_FIELDING_DP -TEAM_BATTING_2B -TEAM_BASERUN_CS -TEAM_PITCHING_HR, data = train_imputed)
+#summary(mod3) #R-sq = 0.334 
+
+#remove TEAM_PITCHING_BB at 0.598258 
+mod3 <- update(mod3, .~. -TEAM_PITCHING_BB, data = train_imputed)
+#summary(mod3) #new R-sq = 0.3342
+
+#remove TEAM_BATTING_BB at 0.169551
+mod3 <- update(mod3, .~. -TEAM_BATTING_BB, data = train_imputed)
+#summary(mod3) #new R-sq = 0.3341
+
+#remove TEAM_PITCHING_H  
+mod3 <- update(mod3, .~. -TEAM_PITCHING_H, data = train_imputed)
+#summary(mod3) #new R-sq = 0.3284
+
+#remove TEAM_PITCHING_SO, it appears collinear  
+mod3 <- update(mod3, .~. -TEAM_PITCHING_SO, data = train_imputed)
+#summary(mod3) #new R-sq = 0.3273
+
+#remove TEAM_BATTING_3B,  
+mod3 <- update(mod3, .~. -TEAM_BATTING_3B, data = train_imputed)
+summary(mod3) #new R-sq = 0.3273
+
+```
+
+In the Model #3 output above, we notice the following:
+
++ All 5 continuous variables & and the intercept are statistically significant. Their p-values are near zero.
+
++ Unlike the previous models, we do not have any unexpected coefficient signs, which means that we have removed at least some of the multilinearity.
+
++ At 0.3258, the adjusted $R^2$ indicates that this model explains 33% of the variance in the response variable.
+
++ At 221, the F-statistic is larger than the other 2 models, and the model's p-value is near zero. If the model's diagnostics are sufficient, these values indicate that we would reject the null hypothesis that there is no relationship between the explanatory & response variables.
+
+
+
+#4. SELECT MODEL
+
+## Evaluation
+
+The table below summarizes the 3 models. 
+
++ While Model #1 has the highest adjusted R-squared, it also had 5 variables that were not statistically significant, and 4 variables with unexpected signs, which indicated multicollinearity issues. 
+
++ Model #2 used fewer variables, but the intercept coefficient was not statistically significant. We also saw some evidence of collinearity.
+
++ **Of the 3, Model #3 is the best.** Removing the non-significant and collinear variables makes it more parsimonious with an adjusted R-squared that is less than Model #1 but much greater than Model #2. This model's F-statistic is also significantly larger than the other 2. Additionally, the difference between Model #3's predicted R-squared and R-squared is smaller than the other models, giving us more confidence that the model is not overfit.
+
+
+```{r compare, echo=F}
+
+PRESS <- function(linear.model) {
+  #source:  https://gist.github.com/tomhopper/8c204d978c4a0cbcb8c0#file-press-r
+  #' calculate the predictive residuals
+  pr <- residuals(linear.model)/(1-lm.influence(linear.model)$hat)
+  #' calculate the PRESS
+  PRESS <- sum(pr^2)
+  
+  return(PRESS)
+}
+pred_r_squared <- function(linear.model) {
+  #source: https://gist.github.com/tomhopper/8c204d978c4a0cbcb8c0#file-pred_r_squared-r
+  #' Use anova() to get the sum of squares for the linear model
+  lm.anova <- anova(linear.model)
+  #' Calculate the total sum of squares
+  tss <- sum(lm.anova$'Sum Sq')
+  # Calculate the predictive R^2
+  pred.r.squared <- 1-PRESS(linear.model)/(tss)
+  
+  return(pred.r.squared)
 }
 
 
-F1_values <- F1_score_generator(some_possible_inputs)
-
-```
-
-**The F1 score simulation produced a minimum & maximum between 0 and 1. Some nans are produced if the sum of the true positive and false negative values or the true positive and false positive values is zero since this divides by zero.**
-
-```{r Q9b, fig.height=12, fig.width=12}
-
-(min_value <- min(F1_values, na.rm = T))
-(max_value <- max(F1_values, na.rm = T))
-
-sum(is.nan(F1_values))
-
-plot(F1_values, cex = .01)
-abline(h = min_value, col = "red")
-abline(h = max_value, col = "red")
-
-hist(F1_values)
-```
-
-
-10. Write a function that generates an ROC curve from a data set with a true classification column (class in our example) and a probability column (scored.probability in our example). Your function should return a list that includes the plot of the ROC curve and a vector that contains the calculated area under the curve (AUC). Note that I recommend using a sequence of thresholds ranging from 0 to 1 at 0.01 intervals.
-
-```{r Q10}
-
-class_prob_df <- subset(class_df, select = c(scored.probability, class))
-
-receiver_operating_characteristic <- function(df, intervals = 10000){
-  # Takes a 2-column df 
-  # The  1st column is the predicted class probablity
-  # The 2nd column is the actual class (0 or 1)
-  # intervals creates the number of thresholds to use between 0 and 1
-  # Calcalutes the sensitivity & 1-specificity for all thresholds
-  # Prints the ROC curve plot & returns the AUC value
-  # AUC reference: https://stackoverflow.com/questions/4954507/calculate-the-area-under-a-curve
-  
-  thresholds <- seq(0, 1, by = 1/intervals)
-
-  sensitivity <- sort(sapply(thresholds, function(x) sensitivity_calc(df, threshold = x)))
-  
-  one_minus_specificity <- sort(1 - sapply(thresholds, function(x) specificity_calc(df, threshold = x)))
-
-  #create plot
-  plot(sensitivity ~ one_minus_specificity, type = "s", xlim=c(0, 1), ylim=c(0, 1), main = "Custom Function")
-  abline(a = 0, b = 1)
-
-    
-  AUC <- sum(diff(one_minus_specificity) * rollmean(sensitivity, 2))
-  AUC
+model_summary <- function(model, y_var) {
+    ### Summarizes the model's key statistics in one row
+    df_summary <- glance(summary(model))
+    model_name <- deparse(substitute(model))
+    n_predictors <- ncol(model$model) - 1
+    pred.r.squared <- pred_r_squared(model)
+    df_summary <- cbind(model_name, n_predictors, pred.r.squared, df_summary)
+    return(df_summary)
 }
+mod_sum_df1 <- model_summary(mod1, "TARGET_WINS")
+mod_sum_df2 <- model_summary(mod2, "TARGET_WINS")
+mod_sum_df3 <- model_summary(mod3, "TARGET_WINS")
 
-(AUC_value <- receiver_operating_characteristic(class_prob_df))
+kable(all_results <- rbind(mod_sum_df1, mod_sum_df2, mod_sum_df3), digits = 4)
+```
+
+##Residual Plots
+
++ In the Q-Q plot, we see some deviations for the normal distribution at the ends. Some of the extreme cases have been labeled. However, as the LMR text suggests, perhaps we can relax the normality assumption since we have more than 2200 observations.
+
++ In the residuals-fitted and standardzied residuals-fitted plots, the best fitted line has a curve in the main cluster, which indicates that we do not have constant variance.
+
++ Ideally, prior to making any inferences, we would want to attempt to transform the data in order to better meet the regression assumptions.
+
+
+```{r plot, echo=F}
+par(mfrow=c(2,2))
+plot(mod3)
 ```
 
 
-11. Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.
+## Test Model
 
-```{r Q11}
+### Explore
 
-classification_output <- c(accuracy_value, cer, sensitivity_value, specificity_value, precision_value, F1_score_value)
+Let's load the data, and look at our `NA` rates.
 
-names(classification_output) <- c("accuracy", "classification error rate", "sensitivity", "specificity", "precision", "F1_score")
-
-
-t(t(classification_output))
+```{r explore, echo=F}
+kable(metadata(test_raw), digits = 1)
 
 ```
 
-12. Investigate the `caret` package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. 
+### Transform & Impute Missing Values
 
-```{r Q12}
+We see similar patterns of missing values, so  let's do the following:
 
-(cMatrix <- confusionMatrix(class_vars$scored.class, class_vars$class, positive = "1"))
++ bin TEAM_PITCHING_H 
++ drop the sparsely populated TEAM_BATTING_HBP
++ and impute the missing values
 
-caret::sensitivity(as.factor(class_vars$scored.class), as.factor(class_vars$class))
-caret::specificity(as.factor(class_vars$scored.class), as.factor(class_vars$class))
+Since we have fewer cases, the NRMSE values are a little higher with the test data.
 
+```{r imput_test, echo=F}
+test_raw$TEAM_PITCHING_H <- bin_data(test_raw$TEAM_PITCHING_H, bins = 5, binType = "quantile") 
+
+levels(test_raw$TEAM_PITCHING_H) <- c("One","Two","Three","Four","Five")
+
+test_raw_less_one <- select(test_raw, -TEAM_BATTING_HBP)
+
+impute_missing_test <- missForest(test_raw_less_one, variablewise = T)
+ 
+# check imputation error
+impute_df <- cbind(metadata(test_raw_less_one), 
+                   range = rapply(impute_missing_test$ximp, max) - rapply(impute_missing_test$ximp, min),
+                   MSE = as.numeric(impute_missing_test$OOBerror),
+                   variable = names(impute_missing_test$ximp)
+                   ) %>% 
+  select(variable, NA_ct, NA_pct, MSE) %>% 
+  mutate(RMSE = sqrt(as.numeric(impute_missing_test$OOBerror)),
+         NRMSE = sqrt(as.numeric(impute_missing_test$OOBerror))/(rapply(impute_missing_test$ximp, max) - rapply(impute_missing_test$ximp, min))) %>% 
+  filter(MSE > 0) %>% 
+  arrange(-NRMSE)
+
+kable(impute_df, digits = 2)
+
+test_imputed <- impute_missing$ximp 
+class(test_imputed$TEAM_PITCHING_H) <- "factor"
+```
+### Predict
+```{r predict}
+test_results <- predict(mod3, newdata = test_imputed)
 ```
 
-How do the results compare with your own functions?
-
-**They match when rounded to the 8th decimal place.**
-
-```{r Q12b}
-
-# get the needed metrics
-caret_metrics <- c(cMatrix$overall[1], 
-                   1 -  as.numeric(cMatrix$overall[1]),
-                   cMatrix$byClass[c(1, 2, 5, 7)])
-
-t(t(round(classification_output, 8) == round(caret_metrics, 8)))
-```
 
 
-
-
-13. Investigate the pROC package. Use it to generate an ROC curve for the data set. How do the results compare with your own functions?
-
-**The ROC curve plots look very similar.**
-
-```{r Q13, fig.height=12, fig.width=12}
-
-(curveROC <- roc(class_prob_df$class, class_prob_df$scored.probability))
-
-par(mfrow=c(2, 2))
-plot(curveROC, legacy.axes = T, main = "pROC Function")
-receiver_operating_characteristic(class_prob_df)
-
-```
-
-**The AUC values are similar but not the same. My AUC value is 7.074137e-05 less. They match when they are rounded to 3 decimal places.**
-
-```{r Q13b}
-as.numeric(curveROC$auc) - AUC_value
-
-round(curveROC$auc, 3) == round(AUC_value, 3)
+#Code Appendix
+```{r appendix, ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE}
 ```
 
