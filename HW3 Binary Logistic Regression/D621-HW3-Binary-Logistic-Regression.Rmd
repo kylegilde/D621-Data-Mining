@@ -230,6 +230,10 @@ target_corr <- subset(cor_df, Var2 == "target" | Var1 == "target")
 rownames(target_corr) <- 1:nrow(target_corr)
 
 kable(target_corr, digits=4, row.names = T, caption = "Corrrelations with Target")
+
+
+
+hist(log(train_data$lstat))
 ```
 
 # 2. DATA PREPARATION
