@@ -4,10 +4,10 @@ subtitle: "Homework #3 Binary Logistic Regression"
 author: "Kyle Gilde"
 date: "3/31/2018"
 output: 
-  pdf_document:
-  #prettydoc::html_pretty:
-   # theme: cayman
-   # highlight: github
+  #pdf_document:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
     toc: true
     toc_depth: 3
 ---
@@ -16,11 +16,12 @@ output:
 ```{r knitr_options, echo=FALSE}
 
 knitr::opts_chunk$set(
-                      error = FALSE
-                      ,message = FALSE
-                      #,tidy = TRUE
-                      ,cache = F
+                      error = F
+                      ,message = T
+                      #,tidy = T
+                      ,cache = T
                       , warning=F
+                      , echo = F
                       )
 ```
 
@@ -69,15 +70,15 @@ eval_data <- read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Min
 
 ## Examine the data
 
-+ This data set was first published in 1978, and it contains 13 variables related to housing, property, transportation, geography, environment, education & crime for the Boston metropolitan area. 
+* This data set was first published in 1978, and it contains 13 variables related to housing, property, transportation, geography, environment, education & crime for the Boston metropolitan area. 
 
-+ For this binary logistic regression, the response variable `target` is either a 1 or 0, where 1 indicates that the crime rate is above the median.
+* For this binary logistic regression, the response variable `target` is either a 1 or 0, where 1 indicates that the crime rate is above the median.
 
-+ Of the 12 explanatory variables, 11 are numeric, and only `chas` is categorical, which is a dummy variable indicating whether the suburb borders the Charles River
+* Of the 12 explanatory variables, 11 are numeric, and only `chas` is categorical, which is a dummy variable indicating whether the suburb borders the Charles River
 
-+ The training data contains 466 complete cases while the evaluation data contains 40 complete case.
+* The training data contains 466 complete cases while the evaluation data contains 40 complete case.
 
-```{r dims}
+```{r dims, results=F}
 #dimensions
 nrow(train_data)
 nrow(eval_data)
@@ -85,11 +86,23 @@ sum(complete.cases(train_data))
 sum(complete.cases(eval_data))
 ```
 
-+ If we employ the heuristic that crime-prone areas alre more likely to have less desirable characteristics, we would suspect that the crime rate might be positively correlated with having industry (`indus`), pollution (`nox`) pupil-teacher ratios (`ptratio`) & lower social status (`lstat`). 
+* If we employ the heuristic that crime-prone areas alre more likely to have less desirable characteristics, we would suspect that the crime rate might be **positively correlated** with the follow variables:
+  - having industry (`indus`)
+  - pollution (`nox`) 
+  - pupil-teacher ratios (`ptratio`) 
+  - lower social status (`lstat`)
 
-+ Conversely, we would expect that the crime rate would be inversely related to the rate of large residential lots (`zn`), the average rooms per dwelling (`rm`), access to radial highways (`rad`) and median owner-occupied home values (`medv`)
+* Conversely, we would expect that the crime rate would be **inversely related** to the following variables: 
+  + rate of large residential lots (`zn`) 
+  + the average rooms per dwelling (`rm`)
+  + access to radial highways (`rad`) 
+  + median owner-occupied home values (`medv`)
 
-+ Without knowing more about 1970s Boston, it's difficult to hypothesize on the relationship of the crime rate to bordering the Charles River (`chas`), having owner-occupied homedbuilt before 1940 (`age`), the distance to Boston's employment centers (`dis`) & the property tax rate per $10,000. (`tax`)
+* Without knowing more about 1970s Boston, it's difficult to hypothesize on the relationship of the crime rate to following variables:
+  + bordering the Charles River (`chas`)
+  + having owner-occupied homedbuilt before 1940 (`age`)
+  + the distance to Boston's employment centers (`dis`)
+  + the property tax rate per $10,000. (`tax`)
 
 
 ![](https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW3%20Binary%20Logistic%20Regression/data-dict.PNG)
@@ -208,16 +221,60 @@ cor_df <- data.frame(Var1=rownames(cormatrix)[row(cormatrix)[upper.tri(cormatrix
   arrange(-Rsquared)
 # https://stackoverflow.com/questions/28035001/transform-correlation-matrix-into-dataframe-with-records-for-each-row-column-pai
 
-kable(cor_df, digits=4, row.names = T, caption = "Top Correlated Variable Pairs")
+#par(mfrow=c(1, 2))
 
-#dedupe the rows
-# sort_rows <- t(apply(corr_list, 1, sort, decreasing = T))
-# fin_list <- corr_list[!base::duplicated(sort_rows), ]
+kable(head(cor_df, 10), digits=4, row.names = T, caption = "Top Correlated Variable Pairs")
 
+#Corrrelations with Target
 target_corr <- subset(cor_df, Var2 == "target" | Var1 == "target")
-
 rownames(target_corr) <- 1:nrow(target_corr)
 
-kable(target_corr, digits=4, row.names = T, caption = "Top Corrrelations  Variable Pairs")
+kable(target_corr, digits=4, row.names = T, caption = "Corrrelations with Target")
 ```
 
+# 2. DATA PREPARATION
+
+# 3. Build Models
+
+## Backward Elimination
+
+
+```{r mod1}
+base_model <- glm(target ~ ., family = "binomial", data = train_data)
+
+mod1 <- base_model
+summary(base_model)
+pvalues <- summary(base_model)$coefficients[,4]
+(remove <- names(which.max(pvalues)))
+removed_vars <- c(remove)
+(max_pvalue <- max(pvalues))
+
+
+while (max_pvalue > .05){
+  mod1 <- update(mod1, as.formula(paste(".~.-", remove)))
+  print(summary(mod1))
+  pvalues <- summary(mod1)$coefficients[,4]
+  print("Remove this one:")
+  print(remove <- names(which.max(pvalues)))
+  print(max_pvalue <- max(pvalues))
+  removed_vars <- c(removed_vars, remove)
+}
+removed_vars
+summary(mod1)
+
+
+```
+
+
+```{r mod2}
+#mod1 <- glm(target ~ ., family = "binomial", train_data)
+
+#summary(mod1)
+
+#bestglm
+```
+
+
+#Code Appendix
+```{r appendix, ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE}
+```
