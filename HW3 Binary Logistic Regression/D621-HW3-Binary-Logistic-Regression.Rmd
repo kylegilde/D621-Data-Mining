@@ -418,11 +418,25 @@ optionally, their pairwise interactions.
 
 ```{r, mod4}
 
-glmulti_mod <- glmulti(base_model, method = "g", maxsize = 12)
+start <- Sys.time() 
+glmulti_mod <- glmulti(base_model_plus, method = "g", maxsize = 12)
+end_time <- Sys.time() 
+duration <-  end_time - start
 
 
 mod_sum <- model_summary(glmulti_mod)
 kable(all_results <- rbind(all_results, glmulti_mod))
+
+
+```
+
+```{r}
+hist(predict(BIC_mod, type = "response"))
+hist(fitted(BIC_mod))
+
+predicted_class <- as.factor(ifelse(fitted(BIC_mod) > .5, 1, 0))
+
+(cMatrix <- confusionMatrix(predicted_class, as.factor(BIC_mod$y), positive = "1"))
 
 
 ```
