@@ -22,3 +22,8 @@ Hmisc
 psych
 corrplot
 bindrcpp
+reshape2
+car
+profileModel
+brglm
+MASS
