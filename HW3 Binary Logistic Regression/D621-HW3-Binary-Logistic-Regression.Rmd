@@ -17,10 +17,10 @@ output:
 
 knitr::opts_chunk$set(
                       error = F
-                      ,message = T
+                      , message = T
                       #,tidy = T
-                      ,cache = T
-                      , warning=F
+                      , cache = T
+                      , warning = F
                       , echo = F
                       )
 ```
@@ -38,10 +38,10 @@ installed_and_loaded <- function(pkg){
 
 
 # requi/red packages
-packages <- c("prettydoc","tidyverse", "caret", "pROC", "DT", "knitr", "ggthemes", "Hmisc", "psych", "corrplot", "reshape2", "car", "MASS", "ResourceSelection", "glmulti") 
+packages <- c("prettydoc","tidyverse", "caret", "pROC", "DT", "knitr", "ggthemes", "Hmisc", "psych", "corrplot", "reshape2", "car", "MASS", "ResourceSelection", "boot") 
 
 #excute function and display the loaded packages
-data.frame(installed_and_loaded(packages))
+data.frame(installed_and_loaded(packages)) 
 ```
 # Overview
 
@@ -63,8 +63,6 @@ A write-up submitted in PDF format. Your write-up should have four sections. Eac
 train_data <- read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW3%20Binary%20Logistic%20Regression/crime-training-data_modified.csv")
 
 eval_data <- read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW3%20Binary%20Logistic%20Regression/crime-evaluation-data_modified.csv")
-
-
 ```
 
 
@@ -123,10 +121,10 @@ sum(complete.cases(eval_data))
 
 ![](https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW3%20Binary%20Logistic%20Regression/data-dict.PNG)
 
-If we employ the heuristic that crime-prone areas alre more likely to have less desirable characteristics, we would suspect that the crime rate might be **positively correlated** with the follow variables:
+If we use the heuristic that crime-prone areas are more likely to have less desirable characteristics, we would expect that the crime rate might be **positively correlated** with the follow variables:
 
   - having industry (`indus`)
-  - pollution (`nox`) 
+  - the amouunt of pollution (`nox`) 
   - pupil-teacher ratios (`ptratio`) 
   - lower social status (`lstat`)
 
@@ -147,9 +145,9 @@ Without knowing more about 1970s Boston, it's difficult to hypothesize on the re
 
 ##Statistical Summary
 
-+ In the summary statistics below, the skewness and kurtosis of the varaibles are not large enough to suggest a transformation.
++ In the summary statistics below, the skewness and kurtosis of the varaibles are not large enough to suggest any variable transformations.
 
-+ Besides the dummy variable for bording the Charles River `chas`, only `zn` has a heavier tail than a normal distribution, and it also has a decent amount of right skewness.
++ Besides the dummy variable for bordering the Charles River `chas`, only `zn` has a heavier tail than a normal distribution, and it also has a decent amount of right skewness.
 
 
 ```{r stats, echo=F}
@@ -192,12 +190,9 @@ pairs(train_data)
 
 ### Correlations
 
-+ In the correlation plot and first table below it, we see that only 2 of the variables are highly correlated with each other. Having access to radial highways (`rad`) and the property tax rate per $10,000. (`tax`) have a positive correlation of 
++ In the correlation plot and first table below it, we see that only 2 of the variables are highly correlated with each other. Having access to radial highways (`rad`) and the property tax rate per $10,000 (`tax`) have a positive correlation coefficent of .91. In our final model, we will want to make sure that we have eliminated any collinearity by checking the variance inflation factor.
 
-
-+ In the second table, the concentration of nitrogen oxide (`nox`) has the highest correlation with the response variable. It has a positive correlation of 0.7261.
-
-+ In our final model, we will want to make sure that we have eliminated multicollinearity by checking the variance inflation factorl
++ In the second table, the concentration of nitrogen oxide (`nox`) has the highest correlation with the response variable. It has a positive correlation of 0.73.
 
 ```{r fig.width = 11, fig.height = 11, echo=F}
 ##CORRELATIONS
@@ -208,38 +203,45 @@ corrplot(cormatrix, method = "square", type = "upper")
 
 #find the top correlations
 correlations <- c(cormatrix[upper.tri(cormatrix)])
-cor_df <- data.frame(Var1=rownames(cormatrix)[row(cormatrix)[upper.tri(cormatrix)]],
-                     Var2=colnames(cormatrix)[col(cormatrix)[upper.tri(cormatrix)]],
-                     Correlation=correlations,
-                     Rsquared=correlations^2) %>% 
+cor_df <- data.frame(Var1 = rownames(cormatrix)[row(cormatrix)[upper.tri(cormatrix)]],
+                     Var2 = colnames(cormatrix)[col(cormatrix)[upper.tri(cormatrix)]],
+                     Correlation = correlations,
+                     Rsquared = correlations^2) %>% 
   arrange(-Rsquared)
 #Reference: https://stackoverflow.com/questions/28035001/transform-correlation-matrix-into-dataframe-with-records-for-each-row-column-pai
 
 #par(mfrow=c(1, 2))
 
-kable(head(cor_df, 10), digits=4, row.names = T, caption = "Top Correlated Variable Pairs")
+kable(head(cor_df, 10), digits = 2, row.names = T, caption = "Top Correlated Variable Pairs")
 
 #Corrrelations with Target
 target_corr <- subset(cor_df, Var2 == "target" | Var1 == "target")
 rownames(target_corr) <- 1:nrow(target_corr)
 
-kable(target_corr, digits=4, row.names = T, caption = "Corrrelations with the Response Variable")
+kable(target_corr, digits = 2, row.names = T, caption = "Corrrelations with the Response Variable")
 
 ```
 
 ### Histograms
 
 
-+ The proportion of large residential lots `zn` is very skewed, and it may benefit from a  transformation.
++ The proportion of large residential lots `zn` is very skewed or is bimodal, and it may benefit from a  transformation.
 
 + To lesser degrees, `dis`, `age` & `lstat` are skewed. We will consider transforms for them as well.
 
++ `rad` & `tax`are bimodal.
+
 ```{r hist, fig.width = 11, fig.height = 11, echo=F}
-
-
 #Predictor histograms
-hist.data.frame(train_data)
-#hist.data.frame(log(train_data))
+train_melted <- reshape::melt(train_data, id.vars = "target") %>% 
+  dplyr::filter(variable != "chas") %>% 
+  mutate(target = as.factor(target))
+
+ggplot(data = train_melted, aes(x = value)) + 
+  geom_histogram(bins = 30) + 
+  facet_wrap(~variable, scales = "free")
+
+#https://www3.nd.edu/~steve/computing_with_data/13_Facets/facets.html
 
 ```
 
@@ -250,198 +252,432 @@ hist.data.frame(train_data)
 
 ```{r box, fig.width = 11, fig.height = 11}
 
-# Side-by-Side Boxplots
-train_melted <- melt(train_data, id.vars = "target") %>% 
-  dplyr::filter(variable != "chas") %>% 
-  mutate(target = as.factor(target))
-
-ggplot(data = train_melted, aes(x=variable, y=value)) + 
-  geom_boxplot(aes(fill=target)) + 
-  facet_wrap( ~ variable, scales="free")
+### Side-by-Side Boxplots
+ggplot(data = train_melted, aes(x = variable, y = value)) + 
+  geom_boxplot(aes(fill = target)) + 
+  facet_wrap( ~ variable, scales = "free")
 
 #Reference: https://stackoverflow.com/questions/14604439/plot-multiple-boxplot-in-one-graph?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
 ```
 
-
-
 # 2. DATA PREPARATION
 
-+ Because the skewed distributions for dis`& `lstat, we will follow Sheather's quote of Cook & Weisberg on page 284 and add log terms to the model. 
++ Because of the **skewed distributions** for `age` & `lstat`, we will follow Sheather's quote of Cook & Weisberg on page 284 and add **log terms** to the model. 
 
-+ Because of the variance between the 2 values of target differs for `zn`, `nox` & `rad`, we will follow Sheather's advice on page 289 and add quadratic terms to the model. 
++ Because of the **variance** between the 2 values of `target` differs for `zn`, `nox` & `rad`, we will follow Sheather's advice on page 289 and add **quadratic terms** to the model. 
 
 + For `zn`specifically, after examining the extreme difference in variances in the boxplot, adding a quadratic terms seems most appropriate.
 
 
-```{r}
+```{r prep}
+# 2. DATA PREPARATION
 
-base_model <- glm(target ~ . , family = "binomial", data = train_data)
+train_data_plus <- 
+  train_data %>% 
+  mutate(
+    log_age = log(age),
+    log_lstat = log(lstat),
+    zn2 = zn^2,
+    rad2 = rad^2,
+    nox2 = I(nox^2) 
+  )
 
 
-base_model_plus <- update(base_model, .~. + I(zn^2)  + I(rad^2) + I(nox^2) + log(age)  + log(lstat), data = train_data)
+base_model_plus <- glm(target ~ . , family = "binomial", data = train_data_plus)
 
 formula(base_model_plus)
- 
 
-#+ I(tax^2) +  log(dis)
+#+  log(dis) + I(tax^2) 
+```
+
+# 3. BUILD MODELS
+
+## Base model: All original variables
+
+First, let's take a look at the model that contains all the original variables.
+
++ In the model summary below, 7 of the 12 variables have statistically significant (stat-sig) p-values at a significance level of .05.
+
++ Contrary to what we expected, the proporition of non-retail business `indus` has a negative coefficient. Having access to radial highways `rad` and median owner-occupied home values `medv` have actually have positive coefficients instead of the expected negative ones. This suggests that we still have some multicollinearity to deal with.
+
+
+```{r base}
+## Base model: All original variables
+summary(base_model <- glm(target ~ . , family = "binomial", data = train_data))
+
 ```
 
 
++ In the model's summary statistics below, we see that the model's p-value is near zero, so we would reject that the null hypothesis that the coefficient values are equal to zero and not related to the response variable.
 
-# 3. Build Models
++ However, the model fails the Hosmer-Lemeshow goodness-of-fit test. With a p-value at .023, we have to reject the Hosmer-Lemeshow null hypothesis that the model does have a good fit.
 
-## Base model: All variables
++ With 3 variables having a variance inflation factor of greater than 4 (`VIF_gt_4`), we do see evidence of multicollinearity.
 
-First, let's take a look at a model that includes all of the variables.
++ The area under the ROC curve (`AUC`) is relatively high at .974.
 
-+ Initially, five variables do not have statistically significant (stat-sig) p-values at a significance level of .05.
 
-+ Contrary to what we suspected, the proporition of non-retal business `indus` has a negative coefficient, and having access to radial highways `rad` and median owner-occupied home values `medv` have actually have positive coefficients.
+```{r base_sum}
 
-```{r base}
+model_summary <- function(model) {
+  ### Summarizes the model's key statistics
+  ### References: https://www.r-bloggers.com/predicting-creditability-using-logistic-regression-in-r-cross-validating-the-classifier-part-2-2/
+  ### https://www.rdocumentation.org/packages/boot/versions/1.3-20/topics/cv.glm
+  ### https://www.rdocumentation.org/packages/ResourceSelection/versions/0.3-1/topics/hoslem.test
+  cost <- function(r, pi = 0) mean(abs(r - pi) > 0.5)
+  
+  df_summary <- data.frame(
+    model_name = deparse(substitute(model)),
+    n_vars = length(coef(model)) - 1,
+    model_pvalue = formatC(pchisq(model$null.deviance - model$deviance, 1, lower=FALSE), format = "e", digits = 2),
+    residual_deviance = model$deviance,
+    H_L_pvalue = hoslem.test(model$y, fitted(model))$p.value,
+    VIF_gt_4 = sum(car::vif(model) > 4),
+    LOOCV_accuracy = 1 - cv.glm(model$model, model, cost = cost)$delta[1],
+    AUC = as.numeric(pROC::roc(model$y, fitted(model))$auc)
+  )
+}
 
+
+mod_sum <- model_summary(base_model)
+kable(all_results <- mod_sum, digits = 3)
+
+
+
+```
+
+```{r base_auc, fig.width = 11, fig.height = 11}
+
+base_model_roc <- roc(base_model$y, fitted(base_model))
+plot(base_model_roc, legacy.axes = T, main = "Model ROCs", col = "gray", xaxs = "i", yaxs = "i")
+```
+
+
+## Base model plus variable transoformations
+
+Next, let's take a look at the model that includes the original variables plus the 5 transformed variables.
+
++ In this model, only 5 of the 17 variables have stat-sig p-values and only 1 of the transformed variables is stat-sig.
+
++ The coefficients of `indus`, `rad`, `medv`, `log_lstat` & `zn2` have the opposite of the signs we expected.
+
+```{r base_plus}
+## Base model plus variable transoformations
 summary(base_model_plus)
 
+```
+
++ In the model's summary statistics below, this model's p-value & deviance have both decreased from the previous 12-variable model. However, Hosmer-Lemeshow goodness-of-fit p-value has declined as well, which indicates that we have to reject the Hosmer-Lemeshow null hypothesis that the model does have a good fit.
+
++ Since 13 of the variables have a variance inflation factor of greater than 4 (`VIF_gt_4`), the  multicollinearity issues have increased.
+
++ The leave-one-out cross-validation accuracy (`LOOCV_accuracy`) is .903 and has declined from the previous model.
+
++ While the area under the **blue-dotted line** of the ROC curve ticked upward to .976, this model has an abundance of problems.
 
 
+```{r base_plus_sum}
+
+mod_sum <- model_summary(base_model_plus)
+kable(all_results <- rbind(all_results, mod_sum), digits = 3)
+
+```
+
+
+```{r base_plus_auc, fig.width = 11, fig.height = 11}
+
+base_model_plus_roc <- roc(base_model_plus$y, fitted(base_model_plus))
+
+plot(base_model_roc, legacy.axes = T, main = "Model ROCs", col = "gray", xaxs = "i", yaxs = "i")
+plot(base_model_plus_roc, add = T, col = "blue", lty = 3)
+
+#https://stats.stackexchange.com/questions/29039/plotting-overlaid-roc-curves?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
 ```
 
 
 ## Backward Elimination
 
+For our 3rd model, let's take the 17 original and transformed variables and perform a backward elimination selection process. We will remove the variable with the highest p-value until only stat-sig variables remain.
 
++ Our selection processed removed 8 of the variables, including 3 of the transformations, which didn't prove to be statistically significant to the model.
 
-```{r mod1}
++ Of the 9 selected variables, the squared transformation of nitrogen oxides concentration `nox2` has by far the largest coefficent at 39.99. We can interpret the effect of of the variable as a unit increase in `nox2` with the other variables held constant increases the log-odds of being above the median crime rate by 39.99.
 
++ `log_age` has the 2nd largest practically significant coefficient at -2.40. We can interpret the effect of of the variable as a unit increase in `log_age` with the other variables held constant decreases the log-odds of being above the median crime rate by 2.4.
+
++ The coefficients of `rad` & `medv`have the opposite of the signs we expected.
+
+```{r bk_elim_mod}
+## Backward Elimination
 
 backward_elim_glm <- function(glmod){
   #performs backward elimination model selection 
   #removes variables until all remaining ones are stat-sig
-  pvalues <- summary(glmod)$coefficients[,4]
-  remove <- names(which.max(pvalues))
-  removed_vars <- remove
-  max_pvalue <- max(pvalues)
-  removed_pvalues <- max_pvalue
+  removed_vars <- c()
+  removed_pvalues <- c()
   
-  while (max_pvalue > .05){
-    # remove the insignificant pvalue
-    glmod <- update(glmod, as.formula(paste(".~.-", remove)))
-    # see if there are any insignificant pvalues remaining
-    pvalues <- summary(glmod)$coefficients[,4]
+  while (max(summary(glmod)$coefficients[, 4]) > .05){  
+    # find insignificant pvalue
+    pvalues <- summary(glmod)$coefficients[, 4]
     max_pvalue <- max(pvalues)
-    # if no, end loop     
-    if (max_pvalue <= .05) break
-
     remove <- names(which.max(pvalues))
     removed_vars <- c(removed_vars, remove)
     removed_pvalues <- c(removed_pvalues, max_pvalue)   
-
+    # update model
+    glmod <- update(glmod, as.formula(paste(".~.-", remove)))  
   }
   
   print("Removed variables:")
-  print(removed_vars)
-  print(removed_pvalues)
+  print(cbind(removed_vars, round(removed_pvalues, 3)))
   return(glmod)
 }
 
 summary(bk_elim_mod <- backward_elim_glm(base_model_plus))
 
-sort(car::vif(bk_elim_mod), decreasing = T)
 
-
-model_summary <- function(model) {
-    ### Summarizes the model's key statistics in one row
-    df_summary <- data.frame(
-      model_name = deparse(substitute(model)),
-      n_vars = length(coef(model)) - 1,
-      pvalue = pchisq(model$null.deviance - model$deviance, 1, lower=FALSE),
-      H_L_pvalue = hoslem.test(model$y, fitted(model))$p.value,
-      VIF_gt_4 = sum(car::vif(model) > 4),
-      AUC = pROC::roc(model$y, fitted(model))$auc
-    )
-}
-
-#(curveROC <- pROC::roc(model$y, fitted(model)))
-
-
-#df_summary$RootMSLE = MLmetrics::RMSLE(, )
-mod_sum <- model_summary(bk_elim_mod)
-kable(all_results <- mod_sum)
-
-#References: https://www.rdocumentation.org/packages/ResourceSelection/versions/0.3-1/topics/hoslem.test
+#format(exp(max(coef(bk_elim_mod))), scientific = F)
+#exp(sort(coef(bk_elim_mod))[2])
 # http://www.stat.tamu.edu/~sheather/book/docs/rcode/Chapter8.R
 ```
 
-##AIC
++ In the model's summary statistics below, the p-value & deviance have both increased from the previous 17-variable model. 
 
-```{r mod2}
++ Additionally, the area under the **orange-dotted line** of the ROC curve is smaller than the previous 2 models, indicating that the model's response probabilities do not correspond as much with the binary outcome of being above or below the median crime rate.
 
-AIC_mod <- MASS::stepAIC(base_model_plus, trace = 0)
-summary(AIC_mod)
++ However, Hosmer-Lemeshow goodness-of-fit p-value is not extreme, which indicates a good fit for the model. 
 
-#plot(mod2)
-sort(vif(AIC_mod), decreasing = T)
++ Addtionally, only 2 variables in the model have a variance inflation factor of greater than 4 (`VIF_gt_4`), which indicates that there are less  multicollinearity issues than the previous models.
 
-mod_sum <- model_summary(AIC_mod)
-kable(all_results <- rbind(all_results, mod_sum))
++ Finally, the leave-one-out cross-validation accuracy (`LOOCV_accuracy`) is .91, which means that this model was as good at predicting each of its values as the `base_model`, but used fewer variables and had less multicollinearity.
+
+
+```{r bk_elim_mod_sum}
+
+mod_sum <- model_summary(bk_elim_mod)
+kable(all_results <- rbind(all_results, mod_sum), digits = 3)
 
 ```
 
-#BIC
 
-```{r mod3}
-n <- nrow(train_data)
+```{r bk_elim_mod_auc, fig.width = 11, fig.height = 11}
+
+bk_elim_mod_roc <- roc(bk_elim_mod$y, fitted(bk_elim_mod))
+
+plot(base_model_roc, legacy.axes = T, main = "Model ROCs", col = "gray", xaxs = "i", yaxs = "i")
+plot(base_model_plus_roc, add = T, col = "blue", lty = 3)
+plot(bk_elim_mod_roc, add = T, col = "orange", lty = 3)
+
+```
+
+
+
+
+##AIC
+
+For our 4th model, let's take the 17 original and transformed variables and perform a forward & backward Akaike information criterion process, where we will select the model that minimizes the AIC value.
+
++ Our selection processed removed 6 of the variables, including 3 of the 5 variable transformations.
+
++ Of the 11 selected variables, `nox2` and `log_age` still have the 2 largest practically significant coefficients at 47.90 and -3.25, respectively.
+
+```{r}
+larger_mod <- update(base_model_plus, .~.^2)
+test <- MASS::stepAIC(larger_mod, trace = 0)
+```
+
+
+```{r AIC_mod}
+
+AIC_mod <- MASS::stepAIC(base_model_plus, trace = 0)
+
+removed_variables <- function(larger_mod, smaller_mod){
+  print("removed variables")
+  names(coef(larger_mod))[!names(coef(larger_mod)) %in%
+names(coef(smaller_mod))]
+}
+
+removed_variables(base_model_plus, AIC_mod)
+
+summary(AIC_mod)
+```
+
++ In the AIC model's summary statistics below, the p-value & deviance have both decreased from the backward elimination model. 
+
++ Additionally, the area under the **red-dotted line** of the ROC curve is larger than the previous model.
+
++ However, Hosmer-Lemeshow goodness-of-fit p-value **is extreme**, which indicates that the model is not a good fit. 
+
++ Addtionally, more than half of the variables have a variance inflation factor of greater than 4, which indicates that there are more multicollinearity issues than the previous model.
+
++ Finally, the leave-one-out cross-validation accuracy (`LOOCV_accuracy`) is the highest so far at .912. We would expect a higher `LOOCV_accuracy` since AIC selection generally optimizes for prediction.
+
+```{r AIC_mod_sum}
+mod_sum <- model_summary(AIC_mod)
+kable(all_results <- rbind(all_results, mod_sum), digits = 3)
+```
+
+
+```{r AIC_mod_auc, fig.width = 11, fig.height = 11}
+
+AIC_mod_roc <- roc(AIC_mod$y, fitted(AIC_mod))
+
+plot(base_model_roc, legacy.axes = T, main = "Model ROCs", col = "gray", xaxs = "i", yaxs = "i")
+plot(base_model_plus_roc, add = T, col = "blue", lty = 3)
+plot(bk_elim_mod_roc, add = T, col = "orange", lty = 3)
+plot(AIC_mod_roc, add = T, col = "red", lty = 3)
+
+```
+
+##BIC
+
+For our final model, let's take the 17 original and transformed variables and perform a forward & backward Baysean information criterion process, where we will select the model that minimizes the AIC value.
+
++ Our selection processed removed 9 of the variables, including 4 of the 5 variable transformations.
+
++ Of the 11 selected variables, `nox2` has the largest practical significance with a coefficient of 39.5. Its 95% confidence interval is between 28.24 and 52.47.
+
+```{r bic_mod}
+
+n <- nrow(base_model_plus$model)
 
 BIC_mod <- step(base_model_plus, k = log(n), trace = 0)
-
+removed_variables(base_model_plus, BIC_mod)
 summary(BIC_mod)
 
-sort(vif(BIC_mod), decreasing = T)
-
-cook_calcs <- cooks.distance(bk_elim_mod)
-sum(cook_calcs>4*mean(cook_calcs))
-
-
-mod_sum <- model_summary(BIC_mod)
-kable(all_results <- rbind(all_results, mod_sum))
-
+confint(BIC_mod)
 
 #Reference: https://stackoverflow.com/questions/19400494/running-a-stepwise-linear-model-with-bic-criterion?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
 ```
 
-#glmulti Package & Function
++ In the BIC model's summary statistics below, the p-value & deviance are the largest of all the models.
 
-To achieve this goal, glmulti clearly has to generate all possible model formulas that involve
-some of the specified effects. More exactly, the user specifies which main effects are to be
-considered, and the program will generate all models including some of these effects and,
-optionally, their pairwise interactions.
++ Additionally, the area under the **green line** of the ROC curve is the smallest.
 
-```{r, mod4}
++ Hosmer-Lemeshow goodness-of-fit p-value **is not extreme**, which indicates that the model is a good fit. 
 
-start <- Sys.time() 
-glmulti_mod <- glmulti(base_model_plus, method = "g", maxsize = 12)
-end_time <- Sys.time() 
-duration <-  end_time - start
++ Moreover, these model does not have any of the multicollinearity issues of the previous models.
+
++ Finally, the leave-one-out cross-validation accuracy (`LOOCV_accuracy`) is the 2nd lowest of all the models.
+
+```{r BIC_mod_sum}
+mod_sum <- model_summary(BIC_mod)
+kable(all_results <- rbind(all_results, mod_sum), digits = 3)
+```
 
 
-mod_sum <- model_summary(glmulti_mod)
-kable(all_results <- rbind(all_results, glmulti_mod))
+```{r BIC_mod_auc, fig.width = 11, fig.height = 11}
 
+BIC_mod_roc <- roc(BIC_mod$y, fitted(BIC_mod))
+
+plot(base_model_roc, legacy.axes = T, main = "Model ROCs", col = "gray", xaxs = "i", yaxs = "i")
+plot(base_model_plus_roc, add = T, col = "blue", lty = 3)
+plot(bk_elim_mod_roc, add = T, col = "orange", lty = 3)
+plot(AIC_mod_roc, add = T, col = "red", lty = 3)
+plot(BIC_mod_roc, add = T, col = "green")
+```
+
+
+# 4. SELECT MODELS
+
+##Confusion Matrix Metrics
+
+While the BIC model performs the worst on several of confusion matrix metrics, it is by only neglible amounts.
+
+The strengths of the BIC model include the following:
+ 
++ With 8 variables, it is the most parsimonious.
+
++ It passes the Hosmer-Lemeshow goodness-of-fit test.
+
++ It doesn't have multicollinearity issues.
+
+```{r select_mod, fig.width = 11, fig.height = 11}
+# 4. SELECT MODELS
+all_models <- as.character(all_results$model_name)
+
+confusion_metrics <- data.frame(metric =  c("Accuracy", "Class. Error Rate", "Sensitivity", "Specificity", "Precision", "F1", "AUC"))
+
+for (i in 1:length(all_models)){
+  model <- get(all_models[i])
+  model_name <- all_models[i]
+  predicted_values <- as.factor(as.integer(fitted(model) > .5))
+  CM <- confusionMatrix(predicted_values, as.factor(model$y), positive = "1")
+  caret_metrics <- c(CM$overall[1], 
+                   1 - as.numeric(CM$overall[1]),
+                   CM$byClass[c(1, 2, 5, 7)],
+                   get(paste0(model_name, "_roc"))$auc)
+  confusion_metrics[, model_name] <- caret_metrics
+}
+
+confusion_metrics_melted <- confusion_metrics %>% 
+  reshape::melt(id.vars = "metric") %>% 
+  dplyr::rename(model = variable)
+
+ggplot(data = confusion_metrics_melted, aes(x = model, y = value)) + 
+  geom_bar(aes(fill = model), stat='identity') +
+  theme(axis.ticks.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.title.x=element_blank()) +
+  facet_grid(~metric) 
+
+#https://stackoverflow.com/questions/18624394/ggplot-bar-plot-with-facet-dependent-order-of-categories/18625739?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+#https://stackoverflow.com/questions/18158461/grouped-bar-plot-in-ggplot?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+
+#kable(confusion_metrics, digits = 3)
 
 ```
 
-```{r}
-hist(predict(BIC_mod, type = "response"))
-hist(fitted(BIC_mod))
+However, a plot of the Standardized Deviance Values against the leverage values shows that we have several observations greater than twice the average leverage value. This indicates that we may want to consider other transformations.
 
-predicted_class <- as.factor(ifelse(fitted(BIC_mod) > .5, 1, 0))
+```{r leverage}
+# influential leverage values
+# MARR p291
+hvalues <- influence(BIC_mod)$hat
+stanresDeviance <- residuals(BIC_mod) / sqrt(1 - hvalues)
+n_predictors <- length(names(BIC_mod$model)) - 1
+average_leverage <- (n_predictors + 1) / nrow(BIC_mod$model)
+plot(hvalues, stanresDeviance,
+     ylab = "Standardized Deviance Residuals",
+     xlab = "Leverage Values", 
+     ylim = c(-3, 3), 
+     xlim = c(-0.05, 0.3))
+abline(v = 2 * average_leverage, lty = 2)
 
-(cMatrix <- confusionMatrix(predicted_class, as.factor(BIC_mod$y), positive = "1"))
-
+#Reference: http://www.stat.tamu.edu/~sheather/book/docs/rcode/Chapter8.R
 
 ```
+
+
+```{r mmps, fig.width = 11, fig.height = 11}
+car::mmps(BIC_mod)
+```
+
+
+## Evalution data set
+
+Finally, when we apply the BIC model to the evalution data, it predicts that there are 21 observations below the median crime rate and 19 above the median crime rate.
+
+```{r eval_data}
+## Evalution data set
+
+eval_data_plus <- 
+  eval_data %>% 
+  mutate(
+    log_age = log(age),
+    log_lstat = log(lstat),
+    zn2 = zn^2,
+    rad2 = rad^2,
+    nox2 = I(nox^2) 
+  )
+
+eval_results <- predict(BIC_mod, newdata = eval_data_plus)
+
+table(as.integer(eval_results > .5))
+```
+
 
 
 #Code Appendix
 ```{r appendix, ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE}
+
 ```

@@ -12,7 +12,6 @@ forcats
 lattice
 caret
 pROC
-zoo
 DT
 knitr
 ggthemes
@@ -21,9 +20,9 @@ Formula
 Hmisc
 psych
 corrplot
-bindrcpp
 reshape2
 car
-profileModel
-brglm
 MASS
+ResourceSelection
+boot
+bindrcpp
