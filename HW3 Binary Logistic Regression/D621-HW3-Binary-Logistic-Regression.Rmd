@@ -428,7 +428,8 @@ backward_elim_glm <- function(glmod){
   }
   
   print("Removed variables:")
-  print(cbind(removed_vars, round(removed_pvalues, 3)))
+  print(removed_pvalues)
+  #print(cbind(removed_vars, round(removed_pvalues, 3)))
   return(glmod)
 }
 
@@ -479,11 +480,6 @@ For our 4th model, let's take the 17 original and transformed variables and perf
 + Our selection processed removed 6 of the variables, including 3 of the 5 variable transformations.
 
 + Of the 11 selected variables, `nox2` and `log_age` still have the 2 largest practically significant coefficients at 47.90 and -3.25, respectively.
-
-```{r}
-larger_mod <- update(base_model_plus, .~.^2)
-test <- MASS::stepAIC(larger_mod, trace = 0)
-```
 
 
 ```{r AIC_mod}
