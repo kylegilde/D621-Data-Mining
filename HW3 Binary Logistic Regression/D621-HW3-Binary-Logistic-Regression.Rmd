@@ -4,12 +4,14 @@ subtitle: "Homework #3 Binary Logistic Regression"
 author: "Kyle Gilde"
 date: "3/31/2018"
 output: 
-  #pdf_document:
-  prettydoc::html_pretty:
-    theme: cayman
-    highlight: github
+
+  pdf_document:
+    df_print: kable
+    #always_allow_html: yes
+
     toc: true
-    toc_depth: 3
+    toc_depth: 2
+geometry: margin=2cm
 ---
 
 
@@ -23,10 +25,13 @@ knitr::opts_chunk$set(
                       , warning = F
                       , echo = F
                       )
+  # prettydoc::html_pretty:
+  #   theme: cayman
+    # highlight: github
 ```
 
 
-```{r packages, echo=F, results=F} 
+```{r packages, echo=F} 
 
 installed_and_loaded <- function(pkg){
   # Load packages. Install them if needed.
@@ -37,8 +42,11 @@ installed_and_loaded <- function(pkg){
 }
 
 
+
 # requi/red packages
-packages <- c("prettydoc","tidyverse", "caret", "pROC", "DT", "knitr", "ggthemes", "Hmisc", "psych", "corrplot", "reshape2", "car", "MASS", "ResourceSelection", "boot") 
+packages <- c("prettydoc","tidyverse", "caret", "pROC", "DT", "knitr", "ggthemes", "Hmisc", "psych", "corrplot", "reshape2", "car", "MASS", "ResourceSelection", "boot", "tinytex", "devtools") 
+
+#install_version("rmarkdown",version=1.8)
 
 #excute function and display the loaded packages
 data.frame(installed_and_loaded(packages)) 
@@ -106,7 +114,8 @@ metadata <- function(df){
 
 meta_df <- metadata(train_data)
 
-datatable(meta_df, options = list(searching = F, paging = F)) 
+#datatable(meta_df, options = list(searching = F, paging = F)) 
+kable(meta_df, digits = 1, format.args = list(big.mark = ',', scientific = F, drop0trailing = T))
 ```
 
 ```{r dims, results=F}
@@ -169,8 +178,8 @@ metrics <- function(df){
 }
 
 metrics_df <- metrics(train_data)
-(dt_metrics <- datatable(round(metrics_df, 2), options = list(searching = F, paging = F)))
-#kable(metrics_df, digits = 1, format.args = list(big.mark = ',', scientific = F, drop0trailing = T))
+#(dt_metrics <- datatable(round(metrics_df, 2), options = list(searching = F, paging = F)))
+kable(metrics_df, digits = 1, format.args = list(big.mark = ',', scientific = F, drop0trailing = T))
 ```
 
 
@@ -316,7 +325,7 @@ summary(base_model <- glm(target ~ . , family = "binomial", data = train_data))
 
 + With 3 variables having a variance inflation factor of greater than 4 (`VIF_gt_4`), we do see evidence of multicollinearity.
 
-+ The area under the ROC curve (`AUC`) is relatively high at .974. This model is already relatively effective at predicting the response variable.
++ The receiver operating characteristic curve plots the true positive rate versus the false positive rate. A value of .5 would incidate that the model is no better than randomly selecting the response variable, and a value of 1 would indicate that the model predicts the correct outcome for all values in the data set. In this first model, the area under the ROC curve (`AUC`) is relatively high at .974. This model is already relatively effective at predicting the response variable.
 
 
 ```{r base_sum}
@@ -344,14 +353,14 @@ model_summary <- function(model) {
 mod_sum <- model_summary(base_model)
 kable(all_results <- mod_sum, digits = 3)
 
-
-
 ```
 
 ```{r base_auc, fig.width = 11, fig.height = 11}
 
 base_model_roc <- roc(base_model$y, fitted(base_model))
 plot(base_model_roc, legacy.axes = T, main = "Model ROCs", col = "gray", xaxs = "i", yaxs = "i")
+
+#https://web.archive.org/web/20160407221300/http://metaoptimize.com:80/qa/questions/988/simple-explanation-of-area-under-the-roc-curve
 ```
 
 
@@ -375,7 +384,7 @@ summary(base_model_plus)
 
 + However, **Hosmer-Lemeshow goodness-of-fit** p-value has declined as well, which indicates that we have to reject the Hosmer-Lemeshow null hypothesis that the model does have a good fit.
 
-+ Since 13 of the variables have a **variance inflation factor** of greater than 4 (`VIF_gt_4`), the  multicollinearity issues have increased.
++ Since 13 of the variables have a **variance inflation factor** of greater than 4 (`VIF_gt_4`), the number of collinear issues have increased.
 
 + The **leave-one-out cross-validation accuracy** (`LOOCV_accuracy`) is .903 and has declined from the previous model.
 
@@ -452,7 +461,7 @@ summary(bk_elim_mod <- backward_elim_glm(base_model_plus))
 
 + However, **Hosmer-Lemeshow goodness-of-fit** p-value is not extreme, which indicates a good fit for the model. 
 
-+ Addtionally, only 2 variables in the model have a **variance inflation factor** of greater than 4 (`VIF_gt_4`), which indicates that there are less  multicollinearity issues than the previous models.
++ Addtionally, only 2 variables in the model have a **variance inflation factor** of greater than 4 (`VIF_gt_4`), which indicates that there are not as many of collinear issues as the previous models.
 
 + Finally, the **leave-one-out cross-validation accuracy** (`LOOCV_accuracy`) is .91, which means that this model was as good at predicting each of its values as the `base_model`, but used fewer variables and had less multicollinearity.
 
@@ -511,7 +520,7 @@ summary(AIC_mod)
 
 + However, Hosmer-Lemeshow goodness-of-fit p-value **is extreme**, which indicates that the model is not a good fit. 
 
-+ Addtionally, **more than half** of the variables have a variance inflation factor of greater than 4, which indicates that there are more multicollinearity issues than the previous model.
++ Addtionally, **more than half** of the variables have a variance inflation factor of greater than 4, which indicates that there is more multicollinearity than the previous model.
 
 + Finally, the leave-one-out cross-validation accuracy (`LOOCV_accuracy`) is the highest so far at .912. We would expect a higher `LOOCV_accuracy` since AIC selection generally optimizes for prediction.
 
@@ -536,7 +545,9 @@ plot(AIC_mod_roc, add = T, col = "red", lty = 3)
 
 For our final model, let's take the 17 original and transformed variables and perform a forward & backward Baysean information criterion process, where we will select the model that minimizes the AIC value.
 
-+ Our selection processed removed 9 of the variables, including 4 of the 5 variable transformations.
++ As we would expect, the BIC process with its larger predictor penalty selected fewer varaiables than AIC.
+
++ It removed 9 of the variables, including 4 of the 5 variable transformations.
 
 + Of the 11 selected variables, `nox2` has the largest practical significance with a coefficient of 39.5. Its 95% confidence interval is between 28.24 and 52.47.
 
@@ -559,9 +570,10 @@ confint(BIC_mod)
 
 + Hosmer-Lemeshow goodness-of-fit p-value **is not extreme**, which indicates that the model is a good fit. 
 
-+ Moreover, these model **does not** have any of the multicollinearity issues of the previous models.
++ Moreover, these model **does not** have any of the collinearity of the previous models.
 
 + Finally, the leave-one-out cross-validation accuracy (`LOOCV_accuracy`) is the 2nd lowest of all the models.
+
 
 ```{r BIC_mod_sum}
 mod_sum <- model_summary(BIC_mod)
@@ -631,7 +643,11 @@ ggplot(data = confusion_metrics_melted, aes(x = model, y = value)) +
 
 ```
 
-However, a plot of the Standardized Deviance Values against the leverage values shows that we have several observations greater than twice the average leverage value. This indicates that we may want to consider other transformations.
+## Diagnostics
+
+### Influence Leverage Values
+
+However, a plot of the Standardized Deviance Values against the leverage values shows that we have several observations greater than twice the average leverage value. This indicates that there may be other possible variable transformations that we have not considered.
 
 ```{r leverage}
 # influential leverage values
@@ -651,9 +667,14 @@ abline(v = 2 * average_leverage, lty = 2)
 
 ```
 
+### Marginal Model Plots
+
+The marginal model plots of the response variable versus the predictors and the fitted response values show that the model closely aligns with the smooth fit function.  
 
 ```{r mmps, fig.width = 11, fig.height = 11}
 car::mmps(BIC_mod)
+
+#http://support.sas.com/documentation/cdl/en/statug/68162/HTML/default/viewer.htm#statug_templt_sect027.htm
 ```
 
 
