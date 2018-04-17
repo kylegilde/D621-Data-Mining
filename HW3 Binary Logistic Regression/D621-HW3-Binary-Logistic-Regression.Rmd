@@ -202,7 +202,7 @@ pairs(train_data)
 
 + To lesser degrees, `dis`, `age` & `lstat` are skewed. We will consider transforms for them as well.
 
-+ `rad` & `tax`are bimodal.
++ `rad` & `tax` are bimodal.
 
 ```{r hist, fig.width = 11, fig.height = 11, echo=F}
 #Predictor histograms
@@ -276,7 +276,7 @@ kable(target_corr, digits = 2, row.names = T, caption = "Corrrelations with the 
 
 + Because of the **variance** between the 2 values of `target` differs for `zn`, `nox` & `rad`, we will follow Sheather's advice on page 289 and add **quadratic terms** to the model. 
 
-+ For `zn`specifically, after examining the extreme difference in variances in the boxplot, adding a quadratic terms seems most appropriate.
++ For `zn` specifically, after examining the extreme difference in variances in the boxplot, adding a quadratic terms seems most appropriate.
 
 
 ```{r prep}
@@ -319,7 +319,7 @@ summary(base_model <- glm(target ~ . , family = "binomial", data = train_data))
 
 ```
 
-+ In the model's summary statistics below, we see that the model's p-value is near zero, so we would reject that the null hypothesis that the coefficient values are equal to zero and not related to the response variable.
++ In the model's summary statistics below, we see that the model's p-value is near zero, so we would reject the null hypothesis that the coefficient values are equal to zero and not related to the response variable.
 
 + However, the model fails the Hosmer-Lemeshow goodness-of-fit test. With a p-value at .023, we have to reject the test's null hypothesis that the model has a good fit.
 
@@ -420,7 +420,7 @@ For our 3rd model, let's take the 17 original and transformed variables and perf
 
 + `log_age` has the 2nd largest practically significant coefficient at -2.40. We can interpret the effect of of the variable as a unit increase in `log_age` with the other variables held constant decreases the log-odds of being above the median crime rate by 2.4.
 
-+ The coefficients of `rad` & `medv`have the opposite of the signs we expected.
++ The coefficients of `rad` & `medv` have the opposite of the signs we expected.
 
 ```{r bk_elim_mod}
 ## Backward Elimination

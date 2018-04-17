@@ -1,0 +1,94 @@
+---
+title: "Binary Logistic Regression Visualizations"
+author: "Kyle Gilde"
+date: "April 12, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+installed_and_loaded <- function(pkg){
+  # Load packages. Install them if needed.
+  # CODE SOURCE: https://gist.github.com/stevenworthington/3178163
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg)) install.packages(new.pkg, dependencies = TRUE)
+  sapply(pkg, require, character.only = TRUE, quietly = TRUE, warn.conflicts = FALSE)
+}
+
+# requi/red packages
+packages <- c("prettydoc","tidyverse", "GGally") 
+
+#excute function and display the loaded packages
+data.frame(installed_and_loaded(packages)) 
+
+
+```
+
+## R Markdown
+
+
+
+```{r cars, warning=F, fig.width=12, fig.height=12}
+
+crimes <- read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW3%20Binary%20Logistic%20Regression/crime-training-data_modified.csv")
+
+crimes_fac <- crimes %>% 
+  mutate(target = as.factor(target),
+         chas = as.factor(chas))
+
+pm <- ggpairs(crimes_fac, 
+              columns = c('rm','medv','lstat', 'age', 'dis','nox', 'indus', 
+                          'tax', 'ptratio', 'rad', 'zn', 'chas'),
+              mapping = ggplot2::aes(color = target),
+              lower = list(continuous = wrap('points', size = 1, alpha = .4), 
+                           combo = wrap('facetdensity', alpha = 1)), 
+              upper = list(continuous =  wrap("cor", size = 2.5, alpha = 1), combo = 'box'),
+              diag = list(continuous = wrap('barDiag', alpha = .9, bins = 15 ))
+              ) +
+theme(panel.background = element_rect(fill = 'grey92', color = NA),
+      panel.spacing = unit(3, "pt"),
+      panel.grid = element_line(color = 'white'),
+      strip.background = element_rect(fill = "grey85", color = NA),
+      plot.margin = margin(.1, .1, .1, .1, "cm"), 
+      panel.border = element_rect(color = "grey85", fill=NA, size= unit(.5, 'pt'))
+      )
+pm
+```
+
+## Including Plots
+
+
+```{r pressure, echo=FALSE, fig.width=11, fig.height=11}
+
+# df2 = data.frame(expl1 = c(1.1,2.0,1.4,1.6,.5,.2,.1), 
+#                  expl2 = c(-1.1,-2.0,-1.4,-1.6,-.5,-.2,-.1), 
+#                  y_value = c(0,1,1,0,1,0,0))
+# df2 %>%
+#   gather(-y_value, key = "some_var_name", value = "some_value_name") %>%
+#   ggplot(aes(x = some_value_name, y = y_value)) + 
+#   geom_point(position = position_jitter(height=.3, width=0), alpha = .4) + 
+#   geom_smooth(method = "glm", method.args = list(family = "binomial")) +  
+#     facet_wrap(~ some_var_name, scales = "free")
+
+
+train_melted <- crimes %>% 
+  #mutate(target = as.factor(target)) %>% 
+  reshape::melt(id.vars = "target") 
+  
+
+train_melted %>%
+  ggplot(aes(x = value, y = target)) +
+  geom_point(position = position_jitter(height=.2, width=.2), alpha = .4, aes(color = as.factor(target))) + 
+  geom_smooth(method = "glm", method.args = list(family = "binomial")) +
+    facet_wrap(~ variable, scales = "free")
+```
+
+
+```{r}
+
+
+
+```
+
