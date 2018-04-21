@@ -1,0 +1,285 @@
+---
+title: "DATA 621 Business Analytics & Data Mining" 
+subtitle: "Homework #4 Linear & Binary Logistic Regression"
+author: "Kyle Gilde"
+date: "4/16/2018"
+output: 
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+#   pdf_document:
+#     df_print: kable
+#     toc: true
+#     toc_depth: 2
+# geometry: margin=2cm
+---
+
+```{r knitr_options, echo=FALSE}
+
+knitr::opts_chunk$set(
+                      error = F
+                      , message = T
+                      #,tidy = T
+                      , cache = T
+                      , warning = F
+                      , echo = F
+                      )
+  # prettydoc::html_pretty:
+  #   theme: cayman
+    # highlight: github
+```
+
+
+
+```{r packages, echo=F, warning=F, message=F} 
+installed_and_loaded <- function(pkg){
+  # Load packages. Install them if needed.
+  # CODE SOURCE: https://gist.github.com/stevenworthington/3178163
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg)) install.packages(new.pkg, dependencies = TRUE)
+  sapply(pkg, require, character.only = TRUE, quietly = TRUE, warn.conflicts = FALSE)
+}
+
+# requi/red packages
+packages <- c("prettydoc","tidyverse", "caret", "pROC", "DT", "knitr", "ggthemes", "Hmisc", "psych", "corrplot", "reshape2", "car", "MASS", "ResourceSelection", "boot", "tinytex", "devtools", "VIM") 
+
+#install_version("rmarkdown",version=1.8)
+
+#excute function and display the loaded packages
+data.frame(installed_and_loaded(packages)) 
+```
+
+#Overview
+
+Your objective is to build **multiple linear regression and binary logistic regression models** on the training data to predict the probability that a person will crash their car and also the amount of money it will cost if the person does crash their car. You can only use the variables given to you (or variables that you derive from the variables provided). 
+
+
+# 1. DATA EXPLORATION
+
+```{r getdata}
+# 1. DATA EXPLORATION
+train_data <- read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW4%20Auto%20Accident%20Prediction/insurance_training_data.csv") %>% 
+  dplyr::select(-INDEX) %>% 
+  mutate(
+    INCOME = as.numeric(INCOME),
+    HOME_VAL = as.numeric(HOME_VAL),
+    BLUEBOOK = as.numeric(BLUEBOOK),
+    OLDCLAIM = as.numeric(OLDCLAIM),
+    MSTATUS = as.factor(str_remove(MSTATUS, "^z_")),
+    SEX = as.factor(str_remove(SEX, "^z_")),
+    EDUCATION = as.factor(str_remove(EDUCATION, "^z_")),
+    JOB = as.factor(str_remove(JOB, "^z_")),
+    CAR_TYPE = as.factor(str_remove(CAR_TYPE, "^z_")),
+    URBANICITY = as.factor(str_remove(URBANICITY, "^z_"))
+  )
+
+eval_data <- read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW4%20Auto%20Accident%20Prediction/insurance-evaluation-data.csv") %>% 
+    dplyr::select(-INDEX) %>% 
+  mutate(
+    INCOME = as.numeric(INCOME),
+    HOME_VAL = as.numeric(HOME_VAL),
+    BLUEBOOK = as.numeric(BLUEBOOK),
+    OLDCLAIM = as.numeric(OLDCLAIM),
+    MSTATUS = as.factor(str_remove(MSTATUS, "^z_")),
+    SEX = as.factor(str_remove(SEX, "^z_")),
+    EDUCATION = as.factor(str_remove(EDUCATION, "^z_")),
+    JOB = as.factor(str_remove(JOB, "^z_")),
+    CAR_TYPE = as.factor(str_remove(CAR_TYPE, "^z_")),
+    URBANICITY = as.factor(str_remove(URBANICITY, "^z_"))
+  )
+
+```
+## Examine the cases & variables
+
+###Data Dictionary
+
+In this homework assignment, you will explore, analyze and model a data set containing 8161 records representing a customer at an auto insurance company. As the KIDSDRIV variable implies, each record represents a customer that could have multiple drivers on the account.
+
+After excluding the `INDEX` variable, there are a total of 25 variables. Each record has two response variables:
+
++ `TARGET_FLAG` is a binary variable where a “1” means that the person was in a car crash. A "0" means that the person was not in a car crash. 
+
++ `TARGET_AMT` is the cost of the accident. It is zero if the person did not crash their car. 
+
+![](https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW4%20Auto%20Accident%20Prediction/Screenshot%202018-04-16%2016.35.57.png)
+
+###Categorical variables
+
+Of the 23 predictor variables, 10 are categorical variables. We notice that the `JOB` variable may be missing some values.
+
+```{r factors, fig.width = 11, fig.height = 11}
+train_factors <- train_data[, sapply(train_data, is.factor)] %>% 
+  gather()
+
+ggplot(data = train_factors, aes(x = reorder(value, value, function(x) length(x)))) + 
+  geom_bar() + 
+  facet_wrap(~key, scales = "free") +
+  coord_flip() + 
+  ggthemes::theme_fivethirtyeight()
+
+```
+
+###Numerical Variables
+
+Among the numerical variables, we notice the following:
+
++ `CAR_AGE`, `YOJ` & `AGE` appear to be missing values.
+
++ The cost of the accident `TARGET_AMT` as well as `KIDSDRIV` have large skew and kurtosis values, which means that they may be candidatese for transformations.
+
+```{r metrics, fig.width = 11, fig.height = 11}
+
+summary_metrics <- function(df){
+  ###Creates summary metrics table
+  metrics_only <- df[, sapply(df, is.numeric)]
+   
+  df_metrics <- psych::describe(metrics_only, quant = c(.25,.75))
+  df_metrics$unique_values = rapply(metrics_only, function(x) length(unique(x)))
+  df_metrics <- 
+    dplyr::select(df_metrics, n, unique_values, min, Q.1st = Q0.25, median, mean, Q.3rd = Q0.75, 
+    max, range, sd, skew, kurtosis
+  )
+  return(df_metrics)
+}
+
+metrics_df <- summary_metrics(train_data)
+
+datatable(round(metrics_df, 2), options = list(searching = F, paging = F))
+
+#kable(metrics_df, digits = 1, format.args = list(big.mark = ',', scientific = F, drop0trailing = T))
+
+```
+
+
+### Missing Values
+
+Let's see how our missing variables are distributed.
+
++ Upon closer inspection, the `JOB` variable actually does not contain `NA`s. It does have a value that does not nave any numbers or letters though.
+
++ 88% of the cases are complete.
+
++ The customer age variable (`AGE`) is missing only 6 values. 
+
++The variables for the age of the car `CAR_AGE` and years on the job `YOJ` are missing about 6% and 5% of their values.
+
++ We should be able to use the other demographic variables to make reasonable imputations for these missing values.
+
+
+```{r missing, fig.width = 11, results=F}
+
+aggr_plot <- VIM::aggr(train_data,  numbers=TRUE, sortVars=TRUE,
+                       labels=names(train_data), 
+                       ylab=c("Missing Value Counts","Pattern"))
+
+#sum(train_data$JOB == "")
+
+summary(aggr_plot)
+```
+
+## Visualizations
+
+### Scatterplots
+
+Let's take a look at the relationships between our numerical variables.
+
+```{r scatter, fig.width = 11, fig.height = 11, echo=F}
+
+train_metrics <- train_data[, sapply(train_data, is.numeric)]
+pairs(train_metrics)
+# pm <- ggpairs(train_data, columns = c('rm','medv','lstat', 'age',
+#                                   'dis','nox', 'indus', 'tax', 
+#                                   'ptratio', 'rad', 'zn', 'chas'),
+#  mapping = ggplot2::aes(color = tag),
+#  lower = list(continuous = wrap('points', size = 1, alpha = .4), 
+#               combo = wrap('facetdensity', alpha = 1)), 
+#  upper = list(continuous =  wrap("cor", size = 2.5, alpha = 1), 
+#               combo = 'box'),
+#  diag = list(continuous = wrap('barDiag', alpha = .9, bins = 15 ))) +
+#   theme(panel.background = element_rect(fill = 'grey92', color = NA),
+#         panel.spacing = unit(3, "pt"),
+#         panel.grid = element_line(color = 'white'),
+#         strip.background = element_rect(fill = "grey85", color = NA),
+#         plot.margin = margin(.1, .1, .1, .1, "cm"), 
+#         panel.border = element_rect(color = "grey85", fill=NA, size= unit(.5, 'pt')))
+# pm
+
+```
+
+### Histograms
+
++ The proportion of large residential lots `zn` is very skewed or is bimodal, and it may benefit from a  transformation.
+
++ To lesser degrees, `dis`, `age` & `lstat` are skewed. We will consider transforms for them as well.
+
++ `rad` & `tax`are bimodal.
+
+```{r hist, fig.width = 11, fig.height = 11, echo=F}
+#Predictor histograms
+# train_melted <- reshape2::melt(train_data, id.vars = "target") %>%
+#   dplyr::filter(variable != "chas") %>%
+#   mutate(target = as.factor(target))
+# 
+# ggplot(data = train_melted, aes(x = value)) +
+#   geom_histogram(bins = 30) +
+#   facet_wrap(~variable, scales = "free")
+
+#https://www3.nd.edu/~steve/computing_with_data/13_Facets/facets.html
+
+```
+
+
+### Side-by-Side Boxplots
+
++ The variance between the 2 values of target differs for `zn`, `nox`, `age`, `dis`, `rad` & `tax`, which indicates that we will want to consider adding quadratic terms for them.
+
+```{r box, fig.width = 11, fig.height = 11}
+
+### Side-by-Side Boxplots
+ggplot(data = train_melted, aes(x = variable, y = value)) + 
+  geom_boxplot(aes(fill = TARGET_FLAG)) + 
+  facet_wrap( ~ variable, scales = "free")
+
+#Reference: https://stackoverflow.com/questions/14604439/plot-multiple-boxplot-in-one-graph?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+```
+
+### Correlations
+
++ In the correlation plot and the table below it, we see that only 2 of the variables are highly correlated with each other. Having access to radial highways (`rad`) and the property tax rate per $10,000 (`tax`) have a positive correlation coefficent of .91. In our final model, we will want to make sure that we have eliminated any collinearity by checking the variance inflation factor.
+
+
+```{r fig.width = 11, fig.height = 11, echo=F}
+##CORRELATIONS
+cormatrix <- cor(train_metrics, use = "complete.obs")
+
+#plot
+corrplot(cormatrix, method = "square", type = "upper")
+
+#find the top correlations
+correlations <- c(cormatrix[upper.tri(cormatrix)])
+cor_df <- data.frame(Var1 = rownames(cormatrix)[row(cormatrix)[upper.tri(cormatrix)]],
+                     Var2 = colnames(cormatrix)[col(cormatrix)[upper.tri(cormatrix)]],
+                     Correlation = correlations,
+                     Rsquared = correlations^2) %>% 
+  arrange(-Rsquared)
+#Reference: https://stackoverflow.com/questions/28035001/transform-correlation-matrix-into-dataframe-with-records-for-each-row-column-pai
+
+kable(head(cor_df, 20), digits = 2, row.names = T, caption = "Top Correlated Variable Pairs")
+```
+
++ The next table shows the correlation coefficents with the response variable `target`. 
+
++ The concentration of nitrogen oxide (`nox`) has the highest correlation with the response variable with a positive correlation of 0.73. Let's see if `nox` plays a prominent role in our modeling.
+
+```{r corrTarget}
+#Corrrelations with Target
+target_corr <- subset(cor_df, Var2 == "TARGET_FLAG" | Var1 == "TARGET_FLAG")
+rownames(target_corr) <- 1:nrow(target_corr)
+
+kable(target_corr, digits = 2, row.names = T, caption = "Corrrelations with the Response Variable")
+
+target_corr <- subset(cor_df, Var2 == "TARGET_AMT" | Var1 == "TARGET_AMT")
+rownames(target_corr) <- 1:nrow(target_corr)
+
+kable(target_corr, digits = 2, row.names = T, caption = "Corrrelations with the Response Variable")
+```
