@@ -97,7 +97,7 @@ In this homework assignment, you will explore, analyze and model a data set cont
 
 After excluding the `INDEX` variable, there are a total of 25 variables. Each record has two response variables:
 
-+ `TARGET_FLAG` is a binary variable where a “1” means that the person was in a car crash. A "0" means that the person was not in a car crash. 
++ `TARGET_FLAG` is a binary variable where a "1" means that the person was in a car crash. A "0" means that the person was not in a car crash. 
 
 + `TARGET_AMT` is the cost of the accident. It is zero if the person did not crash their car. 
 
@@ -168,13 +168,13 @@ Let's see how our missing variables are distributed.
 
 ```{r missing, fig.width = 11, results=F}
 
-aggr_plot <- VIM::aggr(train_data,  numbers=TRUE, sortVars=TRUE,
+missing_plot <- VIM::aggr(train_data,  numbers=TRUE, sortVars=TRUE,
                        labels=names(train_data), 
                        ylab=c("Missing Value Counts","Pattern"))
 
 #sum(train_data$JOB == "")
 
-summary(aggr_plot)
+summary(missing_plot)
 ```
 
 ## Visualizations
@@ -236,9 +236,9 @@ pairs(train_metrics)
 ```{r box, fig.width = 11, fig.height = 11}
 
 ### Side-by-Side Boxplots
-ggplot(data = train_melted, aes(x = variable, y = value)) + 
-  geom_boxplot(aes(fill = TARGET_FLAG)) + 
-  facet_wrap( ~ variable, scales = "free")
+# ggplot(data = train_melted, aes(x = variable, y = value)) + 
+#   geom_boxplot(aes(fill = TARGET_FLAG)) + 
+#   facet_wrap( ~ variable, scales = "free")
 
 #Reference: https://stackoverflow.com/questions/14604439/plot-multiple-boxplot-in-one-graph?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
 ```
@@ -262,9 +262,10 @@ cor_df <- data.frame(Var1 = rownames(cormatrix)[row(cormatrix)[upper.tri(cormatr
                      Correlation = correlations,
                      Rsquared = correlations^2) %>% 
   arrange(-Rsquared)
+
 #Reference: https://stackoverflow.com/questions/28035001/transform-correlation-matrix-into-dataframe-with-records-for-each-row-column-pai
 
-kable(head(cor_df, 20), digits = 2, row.names = T, caption = "Top Correlated Variable Pairs")
+kable(head(cor_df, 5), digits = 2, row.names = T, caption = "Top Correlated Variable Pairs")
 ```
 
 + The next table shows the correlation coefficents with the response variable `target`. 
@@ -272,14 +273,16 @@ kable(head(cor_df, 20), digits = 2, row.names = T, caption = "Top Correlated Var
 + The concentration of nitrogen oxide (`nox`) has the highest correlation with the response variable with a positive correlation of 0.73. Let's see if `nox` plays a prominent role in our modeling.
 
 ```{r corrTarget}
-#Corrrelations with Target
-target_corr <- subset(cor_df, Var2 == "TARGET_FLAG" | Var1 == "TARGET_FLAG")
-rownames(target_corr) <- 1:nrow(target_corr)
+#Corrrelations with TARGET_FLAG
+TARGET_FLAG_corr <- subset(cor_df, Var2 == "TARGET_FLAG" | Var1 == "TARGET_FLAG")
+rownames(TARGET_FLAG_corr) <- 1:nrow(TARGET_FLAG_corr)
 
-kable(target_corr, digits = 2, row.names = T, caption = "Corrrelations with the Response Variable")
+kable(head(TARGET_FLAG_corr, 5), digits = 2, row.names = T, caption = "Corrrelations with the Response Variable")
 
-target_corr <- subset(cor_df, Var2 == "TARGET_AMT" | Var1 == "TARGET_AMT")
-rownames(target_corr) <- 1:nrow(target_corr)
+#Corrrelations with TARGET_AMT
 
-kable(target_corr, digits = 2, row.names = T, caption = "Corrrelations with the Response Variable")
+TARGET_AMT_corr <- subset(cor_df, Var2 == "TARGET_AMT" | Var1 == "TARGET_AMT")
+rownames(TARGET_AMT_corr) <- 1:nrow(TARGET_AMT_corr)
+
+kable(head(TARGET_AMT_corr, 5), digits = 2, row.names = T, caption = "Corrrelations with the Response Variable")
 ```
