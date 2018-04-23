@@ -7,11 +7,9 @@ output:
   prettydoc::html_pretty:
     theme: cayman
     highlight: github
-#   pdf_document:
-#     df_print: kable
-#     toc: true
-#     toc_depth: 2
-# geometry: margin=2cm
+    toc: true
+    toc_depth: 3
+
 ---
 
 ```{r knitr_options, echo=FALSE}
@@ -32,7 +30,7 @@ knitr::opts_chunk$set(
 
 
 ```{r packages, echo=F, warning=F, message=F} 
-installed_and_loaded <- function(pkg){
+load_install <- function(pkg){
   # Load packages. Install them if needed.
   # CODE SOURCE: https://gist.github.com/stevenworthington/3178163
   new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
@@ -40,13 +38,16 @@ installed_and_loaded <- function(pkg){
   sapply(pkg, require, character.only = TRUE, quietly = TRUE, warn.conflicts = FALSE)
 }
 
-# requi/red packages
-packages <- c("prettydoc","tidyverse", "caret", "pROC", "DT", "knitr", "ggthemes", "Hmisc", "psych", "corrplot", "reshape2", "car", "MASS", "ResourceSelection", "boot", "tinytex", "devtools", "VIM") 
+# required packages
+packages <- c("prettydoc","tidyverse", "caret", "pROC", "DT", "knitr", "ggthemes", "Hmisc", "psych", "corrplot", "reshape2", "car", "MASS", "ResourceSelection", "boot", "tinytex", "devtools", "VIM", "GGally", "missForest", "DMwR") 
 
 #install_version("rmarkdown",version=1.8)
 
 #excute function and display the loaded packages
-data.frame(installed_and_loaded(packages)) 
+table(load_install(packages))
+
+#data.frame(load_install(packages)) 
+#load_install(packages)
 ```
 
 #Overview
@@ -103,29 +104,17 @@ After excluding the `INDEX` variable, there are a total of 25 variables. Each re
 
 ![](https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW4%20Auto%20Accident%20Prediction/Screenshot%202018-04-16%2016.35.57.png)
 
-###Categorical variables
-
-Of the 23 predictor variables, 10 are categorical variables. We notice that the `JOB` variable may be missing some values.
-
-```{r factors, fig.width = 11, fig.height = 11}
-train_factors <- train_data[, sapply(train_data, is.factor)] %>% 
-  gather()
-
-ggplot(data = train_factors, aes(x = reorder(value, value, function(x) length(x)))) + 
-  geom_bar() + 
-  facet_wrap(~key, scales = "free") +
-  coord_flip() + 
-  ggthemes::theme_fivethirtyeight()
-
-```
-
-###Numerical Variables
+###Statistical Summary
 
 Among the numerical variables, we notice the following:
 
 + `CAR_AGE`, `YOJ` & `AGE` appear to be missing values.
 
-+ The cost of the accident `TARGET_AMT` as well as `KIDSDRIV` have large skew and kurtosis values, which means that they may be candidatese for transformations.
++ Additionally, `CAR_AGE` has a minimum value of -3. We should consider imputing a value for this observation and variable that isn't impossible. 
+
++ The cost of the accident `TARGET_AMT` has large skew and kurtosis values, which means that it may be a candidate for transformation.
+
++ The small values for `INCOME`, `HOME_VAL` & `BLUEBOOK` indicate that this data set is a few decades old.
 
 ```{r metrics, fig.width = 11, fig.height = 11}
 
@@ -150,117 +139,168 @@ datatable(round(metrics_df, 2), options = list(searching = F, paging = F))
 
 ```
 
-
-### Missing Values
-
-Let's see how our missing variables are distributed.
-
-+ Upon closer inspection, the `JOB` variable actually does not contain `NA`s. It does have a value that does not nave any numbers or letters though.
-
-+ 88% of the cases are complete.
-
-+ The customer age variable (`AGE`) is missing only 6 values. 
-
-+The variables for the age of the car `CAR_AGE` and years on the job `YOJ` are missing about 6% and 5% of their values.
-
-+ We should be able to use the other demographic variables to make reasonable imputations for these missing values.
-
-
-```{r missing, fig.width = 11, results=F}
-
-missing_plot <- VIM::aggr(train_data,  numbers=TRUE, sortVars=TRUE,
-                       labels=names(train_data), 
-                       ylab=c("Missing Value Counts","Pattern"))
-
-#sum(train_data$JOB == "")
-
-summary(missing_plot)
-```
-
 ## Visualizations
 
-### Scatterplots
+###Categorical & Discrete variables
 
-Let's take a look at the relationships between our numerical variables.
+####Frequencies
 
-```{r scatter, fig.width = 11, fig.height = 11, echo=F}
+10 of the variables are categorical, and 5 are discrete numerical variables with fewer than 20 values. 
 
-train_metrics <- train_data[, sapply(train_data, is.numeric)]
-pairs(train_metrics)
-# pm <- ggpairs(train_data, columns = c('rm','medv','lstat', 'age',
-#                                   'dis','nox', 'indus', 'tax', 
-#                                   'ptratio', 'rad', 'zn', 'chas'),
-#  mapping = ggplot2::aes(color = tag),
-#  lower = list(continuous = wrap('points', size = 1, alpha = .4), 
-#               combo = wrap('facetdensity', alpha = 1)), 
-#  upper = list(continuous =  wrap("cor", size = 2.5, alpha = 1), 
-#               combo = 'box'),
-#  diag = list(continuous = wrap('barDiag', alpha = .9, bins = 15 ))) +
-#   theme(panel.background = element_rect(fill = 'grey92', color = NA),
-#         panel.spacing = unit(3, "pt"),
-#         panel.grid = element_line(color = 'white'),
-#         strip.background = element_rect(fill = "grey85", color = NA),
-#         plot.margin = margin(.1, .1, .1, .1, "cm"), 
-#         panel.border = element_rect(color = "grey85", fill=NA, size= unit(.5, 'pt')))
-# pm
++ In our response variable `TARGET_FLAG`, more than 70% of the cars have not been in an accident.
 
-```
++ Many of the variables have one value that is greater than 60%. Hence, we could reasonably assert that the company's typical customer is married with no kids at home or driving, lives in an urban area, has no claims in the last 5 years and has not had his or her license revoked.
 
-### Histograms
++ We notice that the `JOB` variable may be missing some values.
 
-+ The proportion of large residential lots `zn` is very skewed or is bimodal, and it may benefit from a  transformation.
+```{r factors, fig.width = 11, fig.height = 11}
+###Categorical & Discrete variables Frequencies
+cat_discrete_vars <- train_data %>% 
+  mutate(
+    TARGET_FLAG	= as.factor(TARGET_FLAG),
+    KIDSDRIV	= as.factor(KIDSDRIV),	
+    HOMEKIDS	= as.factor(HOMEKIDS),	
+    CLM_FREQ	= as.factor(CLM_FREQ),	
+    MVR_PTS	= as.factor(MVR_PTS)	    
+  )
 
-+ To lesser degrees, `dis`, `age` & `lstat` are skewed. We will consider transforms for them as well.
+cat_discrete_freq <-   
+  cat_discrete_vars[, sapply(cat_discrete_vars, is.factor)] %>% 
+  gather("var", "value") %>% 
+  group_by(var) %>% 
+  count(var, value) %>%
+  mutate(prop = prop.table(n))
 
-+ `rad` & `tax`are bimodal.
+ggplot(data = cat_discrete_freq, 
+       aes(x = reorder(value, prop),
+       y = prop)) + 
+  geom_bar(stat = "identity") + 
+  facet_wrap(~var, scales = "free") +
+  coord_flip() + 
+  ggthemes::theme_fivethirtyeight()
 
-```{r hist, fig.width = 11, fig.height = 11, echo=F}
-#Predictor histograms
-# train_melted <- reshape2::melt(train_data, id.vars = "target") %>%
-#   dplyr::filter(variable != "chas") %>%
-#   mutate(target = as.factor(target))
-# 
-# ggplot(data = train_melted, aes(x = value)) +
-#   geom_histogram(bins = 30) +
-#   facet_wrap(~variable, scales = "free")
-
-#https://www3.nd.edu/~steve/computing_with_data/13_Facets/facets.html
+# https://stackoverflow.com/questions/34860535/how-to-use-dplyr-to-generate-a-frequency-table?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
 
 ```
 
+####Side-by-Side Boxplots
+
+The box plots contain the square root of `TARGET_AMT` distributions for each of the categorical and discrete variable values. We can see several several noteworthy differences in distributions that will likely inform some variable transformations.
+
+The following characteristics significantly decrease the center of accident cost distribution compared to the other variable characteristics. We would these coeffients to be negative in our models.
+
++ Having no kids at home in `HOMEKIDS` or no kids driving in `KIDSDRIV`
+
++ Not being a single parent `PARENT1` 
+
++ Being married `MSTATUS`
+
++ Having a Bachelors, Masters or PhD in `EDUCATION`
+
++ Being a doctor, lawyer, manager or professional in `JOB`
+
++ Not using the car for commercial purposes
+
++ Driving a minivan `CAR_TYPE` & living in a rural area `URBANCITY`
+
++ Having no claims in the last five years `CLM_FRQ` or not have had your licence revoked `REVOKED`
+
++ Having 1 or less motor vehicle points
+
+```{r boxes, fig.width = 11, fig.height = 11}
+####Side-by-Side Boxplots
+boxplot_data <- cat_discrete_vars %>% 
+  select_if(is.factor) %>% 
+  mutate(TARGET_AMT = cat_discrete_vars$TARGET_AMT) %>% 
+  dplyr::select(-TARGET_FLAG) %>% 
+  reshape2::melt(id.vars = "TARGET_AMT")
+
 
 ### Side-by-Side Boxplots
-
-+ The variance between the 2 values of target differs for `zn`, `nox`, `age`, `dis`, `rad` & `tax`, which indicates that we will want to consider adding quadratic terms for them.
-
-```{r box, fig.width = 11, fig.height = 11}
-
-### Side-by-Side Boxplots
-# ggplot(data = train_melted, aes(x = variable, y = value)) + 
-#   geom_boxplot(aes(fill = TARGET_FLAG)) + 
-#   facet_wrap( ~ variable, scales = "free")
+ggplot(data = boxplot_data, aes(x = value, y = TARGET_AMT)) +
+  geom_boxplot() +
+  facet_wrap( ~ variable, scales = "free") +
+  stat_summary(fun.y=mean, geom="point", size=1, color = "red") +
+  scale_y_sqrt(breaks = c(1000, 5000, 10000, 20000 * c(1:4))) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))# +
+  #coord_flip() +
+ #ggthemes::theme_fivethirtyeight()
 
 #Reference: https://stackoverflow.com/questions/14604439/plot-multiple-boxplot-in-one-graph?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+
 ```
+
+### Scatterplots, Histograms & Density Plots
+
+Let's take a look at the relationships between our continuous variables. I have to give credit to classmate Jaan Bernberg for showing me the following `GGally` plot.
+
++ First, the side-by-side **box plots** along the top row show surprisingly little difference in the variance and distribution between customers without an accident (in red) and those with an accident (in light blue). The only variable with moderately different different distributions is `OLDCLAIM`. Customers without accidents have smaller amounts of claim payouts in the last 5 years.
+
++ In the histograms along the diagonal, other than `OLDCLAIM`, there are not severely different distributions between the 2 types of customers represented by `TARGET_FLAG`. The variables `BLUEBOOK` and `CAR_AGE` are bimodal & may benefit from transformations.
+
++ The side-by-side density plots in the 1st column reveal that the `INCOME` appears to be higher for customers who have had an accident. In our models, let's see if this variable defies conventional wisdom is positively correlated with accidents.
+
++ Next, let's take a look at the scatterplots in the 2nd column where our continuous response variable `TARGET_AMT` is plotted against the other predictor variables. We don't see any pronounced positive or negative relationships. However, we see evidence that we may be able to make these relationships more linear by transforming `TARGET_AMT`.
+
++ Lastly, we notice that the correlation values in the upper triangal section seem to be very small. We will confirm this in the next section.
+
+
+```{r scatter, fig.width = 12, fig.height = 12, echo=F, warning=F, error=F, message=F}
+### Scatterplots
+continuous_vars <-
+  cat_discrete_vars %>%
+  mutate(TARGET_FLAG = as.numeric(TARGET_FLAG) - 1) %>%
+  select_if(is.numeric) %>%
+  mutate(TARGET_FLAG = as.factor(TARGET_FLAG))
+
+memory.limit(size = 20000)
+
+binary_plot <- GGally::ggpairs(
+  na.omit(continuous_vars),
+  mapping = ggplot2::aes(color = TARGET_FLAG),
+  lower = list(continuous = wrap('points', size = 1, alpha = .4),
+              combo = wrap('facetdensity', alpha = 1)),
+  upper = list(continuous =  wrap("cor", size = 3, alpha = 1),
+              combo = 'box'),
+  diag =  list(continuous = wrap('barDiag', alpha = .9, bins = 15 ))
+ )  +
+  theme(panel.background = element_rect(fill = 'grey92', color = NA),
+        panel.spacing = unit(3, "pt"),
+        panel.grid = element_line(color = 'white'),
+        strip.background = element_rect(fill = "grey85", color = NA),
+        #plot.margin = margin(.1, .1, .1, .1, "cm"),
+        panel.border = element_rect(color = "grey85", fill=NA, size= unit(.5, 'pt')))
+
+binary_plot
+#http://ggobi.github.io/ggally/#columns_and_mapping
+
+```
+
 
 ### Correlations
 
-+ In the correlation plot and the table below it, we see that only 2 of the variables are highly correlated with each other. Having access to radial highways (`rad`) and the property tax rate per $10,000 (`tax`) have a positive correlation coefficent of .91. In our final model, we will want to make sure that we have eliminated any collinearity by checking the variance inflation factor.
+As we noted above, none of the variable pairs have strong correlations. `YOJ` and `INCOME` are the most correlated at .31. We will likely not have collinearity among our original variables.
 
 
 ```{r fig.width = 11, fig.height = 11, echo=F}
 ##CORRELATIONS
-cormatrix <- cor(train_metrics, use = "complete.obs")
+cormatrix <- 
+  continuous_vars %>% 
+  dplyr::select(-TARGET_FLAG) %>% 
+  cor(use = "complete.obs")
 
 #plot
-corrplot(cormatrix, method = "square", type = "upper")
+#corrplot(cormatrix, method = "square", type = "upper")
 
 #find the top correlations
 correlations <- c(cormatrix[upper.tri(cormatrix)])
-cor_df <- data.frame(Var1 = rownames(cormatrix)[row(cormatrix)[upper.tri(cormatrix)]],
-                     Var2 = colnames(cormatrix)[col(cormatrix)[upper.tri(cormatrix)]],
-                     Correlation = correlations,
-                     Rsquared = correlations^2) %>% 
+
+cor_df <- 
+  data.frame(Var1 = rownames(cormatrix)[row(cormatrix)[upper.tri(cormatrix)]],
+             Var2 = colnames(cormatrix)[col(cormatrix)[upper.tri(cormatrix)]],
+             Correlation = correlations,
+             Rsquared = correlations^2
+             ) %>% 
   arrange(-Rsquared)
 
 #Reference: https://stackoverflow.com/questions/28035001/transform-correlation-matrix-into-dataframe-with-records-for-each-row-column-pai
@@ -268,21 +308,229 @@ cor_df <- data.frame(Var1 = rownames(cormatrix)[row(cormatrix)[upper.tri(cormatr
 kable(head(cor_df, 5), digits = 2, row.names = T, caption = "Top Correlated Variable Pairs")
 ```
 
-+ The next table shows the correlation coefficents with the response variable `target`. 
-
-+ The concentration of nitrogen oxide (`nox`) has the highest correlation with the response variable with a positive correlation of 0.73. Let's see if `nox` plays a prominent role in our modeling.
+The correlation coefficents with the response variable `TARGET_AMT` are even weaker. `OLDCLAIM` is only correlated with the response variable at .18.  
 
 ```{r corrTarget}
-#Corrrelations with TARGET_FLAG
-TARGET_FLAG_corr <- subset(cor_df, Var2 == "TARGET_FLAG" | Var1 == "TARGET_FLAG")
-rownames(TARGET_FLAG_corr) <- 1:nrow(TARGET_FLAG_corr)
-
-kable(head(TARGET_FLAG_corr, 5), digits = 2, row.names = T, caption = "Corrrelations with the Response Variable")
-
 #Corrrelations with TARGET_AMT
-
 TARGET_AMT_corr <- subset(cor_df, Var2 == "TARGET_AMT" | Var1 == "TARGET_AMT")
 rownames(TARGET_AMT_corr) <- 1:nrow(TARGET_AMT_corr)
 
-kable(head(TARGET_AMT_corr, 5), digits = 2, row.names = T, caption = "Corrrelations with the Response Variable")
+kable(head(TARGET_AMT_corr, 5), digits = 2, row.names = T, caption = "Top Corrrelations with the Response Variable")
 ```
+
+## Missing Values
+
+Let's see how our missing variables are distributed.
+
++ Upon closer inspection, the `JOB` variable actually does not contain `NA`s. It does have a "blank" value. It's unclear whether the observation is missing. We will consider either replacing it with UNKNOWN or imputing it.
+
++ 88% of the cases are complete.
+
++The variables for the age of the car `CAR_AGE` and years on the job `YOJ` are missing about 6% and 5% of their values.
+
++ The customer age variable (`AGE`) is missing only 6 values. 
+
++ We should be able to use the other demographic variables to make reasonable imputations for these missing values.
+
+```{r missing, fig.width = 11, results=F}
+## Missing Values
+missing_plot <- VIM::aggr(train_data,  numbers=TRUE, sortVars=TRUE,
+                       labels=names(train_data), 
+                       ylab=c("Missing Value Counts","Pattern"))
+
+sum(train_data$JOB == "")
+
+summary(missing_plot)
+
+```
+
+# 2. DATA PREPARATION
+
+## Imputing the Missing Values
+
+Let's use the missForest package to do nonparametric missing-value imputation using Random Forest on both the training and evaluation sets. We will set the impossible -3 `CAR_AGE` value to `NA` as well.
+
+When we use the out-of-the-bag error in order to calculate the normalized root mean-squares error, we see NRMSE values near zero, which indicates that we have well-fitted imputations.
+
+[Source: Accuracy and Errors for Models](http://rcompanion.org/handbook/G_14.html)
+
+```{r impute, echo=F}
+train_data$CAR_AGE[train_data$CAR_AGE == -3] <- NA
+
+eval_data <- dplyr::select(eval_data, -c(TARGET_FLAG, TARGET_AMT))
+
+## Imputing the Missing Values
+if (!exists("imputed_train")){
+  imputed_train <- missForest(train_data, variablewise = T)
+  imputed_eval <- missForest(eval_data, variablewise = T)
+}
+```
+
+```{r impute_results, echo=F}
+#impute_results
+impute_df <- 
+  summary(missing_plot)$missings %>% 
+  mutate(
+    MSE = as.numeric(imputed_train$OOBerror),
+    Max = sapply(imputed_train$ximp, function(x) tryCatch(max(x), error=function(err) NA)),
+    Min = sapply(imputed_train$ximp, function(x) tryCatch(min(x), error=function(err) NA)),
+    Range = Max - Min,
+    NRMSE = sqrt(MSE)/Range
+  ) %>% 
+  filter(MSE > 0) %>% 
+  dplyr::select(-c(Max, Min, Range)) %>% 
+  arrange(-NRMSE)
+  
+
+kable(impute_df, digits = 2) 
+
+#https://stackoverflow.com/questions/14668972/catch-an-error-by-producing-na?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+```
+
+## Variable Transformations
+
+We will use the distribution differences seen in the side-by-side box plots to create the following new dummy variables. In our modeling, if they end up being statistically significant, we may be able to create more parsimonious models with fewer dummy variables created from the categorical variables.
+
++ `NOHOMEKIDS`
+
++ `NOKIDSDRIV`
+
++ `HASCOLLEGE`
+
++ `ISPROFESSIONAL` 
+
++ `ISMINIVAN`
+
+
+
+```{r}
+imputed_train$ximp$JOB <- as.character(imputed_train$ximp$JOB)
+imputed_train$ximp$JOB[imputed_train$ximp$JOB == ""] <- "Unknown"
+imputed_train$ximp$JOB <- as.factor(imputed_train$ximp$JOB)
+
+train_transformed <- 
+  imputed_train$ximp %>% #
+  mutate(
+    NOHOMEKIDS = as.integer(HOMEKIDS == 0),
+    NOKIDSDRIV = as.integer(KIDSDRIV == 0),
+    HASCOLLEGE = as.integer(EDUCATION %in% c("Bachelors", "Masters", "PhD")),
+    ISPROFESSIONAL = as.integer(JOB %in% c("Doctor", "Lawyer", "Manager", "Professional")),
+    ISMINIVAN = as.integer(CAR_TYPE == "Minivan"),
+    sqrt.TARGET_AMT = sqrt(TARGET_AMT)
+  ) %>% 
+  dplyr::select(-c(HOMEKIDS, KIDSDRIV, EDUCATION, JOB, CAR_TYPE, TARGET_AMT))
+
+
+
+
+```
+
+# 3. BUILD MODELS
+
+## Linear Regression
+
+### LM #1: Original Variables Backward Elimination
+
+```{r orig_var_bk_elim}
+### LM #1: Original Variables Backward Elimination
+
+orig_var_lm <- lm(TARGET_AMT ~ .^2, data = dplyr::select(imputed_train$ximp, -TARGET_FLAG))
+
+n <- nrow(orig_var_lmod$model)
+
+
+BIC_orig_var_lm <- step(orig_var_lmod, k = log(n), trace = 0)
+
+summary(BIC_orig_var_lm)
+
+# v2 <- leaps::leaps(x = , y = , method = "adjr2")
+# #orig_var_bk_elim <- step(orig_var_lmod, direction = "both", test = "F")
+# leaps::regsubsets(x = orig_var_lmod$call, data = orig_var_lmod$model)
+
+plot(orig_var_bk_elim)
+
+car::durbinWatsonTest(orig_var_bk_elim)
+car::ncvTest(orig_var_bk_elim)
+
+load_install("nortest")
+cooks.distance()
+nortest::ad.test(orig_var_bk_elim$residuals)$p.value
+
+```
+
+```{r orig_var_bk_elim2}
+
+PRESS <- function(linear.model) {
+  #source:  https://gist.github.com/tomhopper/8c204d978c4a0cbcb8c0#file-press-r
+  #' calculate the predictive residuals
+  pr <- residuals(linear.model)/(1 - lm.influence(linear.model)$hat)
+  #' calculate the PRESS
+  PRESS <- sum(pr^2)
+  return(PRESS)
+}
+pred_r_squared <- function(linear.model) {
+  #source: https://gist.github.com/tomhopper/8c204d978c4a0cbcb8c0#file-pred_r_squared-r
+  #' Use anova() to get the sum of squares for the linear model
+  lm.anova <- anova(linear.model)
+  #' Calculate the total sum of squares
+  tss <- sum(lm.anova$'Sum Sq')
+  # Calculate the predictive R^2
+  pred.r.squared <- 1 - PRESS(linear.model)/(tss)
+  return(pred.r.squared)
+}
+
+lmodel_summary <- function(lmod) {
+    ### Summarizes the model's key statistics in one row
+    ### https://gist.github.com/stephenturner/722049#file-pvalue-from-lm-object-r-L5
+    lm_summary <- summary(lmod)
+    f <- as.numeric(lm_summary$fstatistic)
+
+    df_summary <- 
+      data.frame(
+        model_name = deparse(substitute(lmod)), 
+        n_predictors = ncol(lmod$model) - 1,
+        numdf = f[2],
+        fstat = f[1],
+        p.value = formatC(pf(f[1], f[2], f[3], lower.tail = F), format = "e", digits = 2),
+        adj.r.squared = lm_summary$adj.r.squared,
+        pre.r.squared = pred_r_squared(lmod),
+        rmse = as.numeric(DMwR::regr.eval(lmod$model[1], fitted(lmod), stats = c("rmse"))),
+        VIF_gt_4 = sum(car::vif(lmod) > 4)
+        )
+    return(df_summary)
+}
+
+kable(lm_results <- lmodel_summary(orig_var_bk_elim), digits = 3)
+```
+
+
+```{r transf_var_bk_elim_lm}
+
+transf_var_lmod <- lm(sqrt.TARGET_AMT ~ .-TARGET_FLAG, data = train_transformed)
+
+
+
+transf_var_bk_elim_lm <- backward_elim_lm(transf_var_lmod)
+summary(transf_var_bk_elim_lm)
+
+plot(transf_var_bk_elim_lm)
+
+transf_var_bk_elim_lm$model[c(7691, 7072, 7780), ]
+
+car::durbinWatsonTest(transf_var_bk_elim_lm)
+car::ncvTest(transf_var_bk_elim_lm)
+nortest::ad.test(transf_var_bk_elim_lm$residuals)$p.value
+load_install("nortest")
+
+
+```
+
+```{r transf_var_bk_elim_lm2}
+
+model_results <- lmodel_summary(transf_var_bk_elim_lm)
+
+kable(lm_results <- rbind(lm_results, model_results), digits = 3)
+```
+
+
+
