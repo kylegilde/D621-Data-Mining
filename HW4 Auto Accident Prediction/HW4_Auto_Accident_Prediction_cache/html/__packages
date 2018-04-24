@@ -30,10 +30,12 @@ devtools
 colorspace
 data.table
 VIM
-bindrcpp
 GGally
 randomForest
 foreach
 iterators
 itertools
 missForest
+DMwR
+nortest
+bindrcpp

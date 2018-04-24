@@ -1,9 +1,8 @@
-backward_elim_lm <- function(lmod){
+backward_elimination <- function(lmod){
   #performs backward elimination model selection 
   #removes variables until all remaining ones are stat-sig
   removed_vars <- c()
   removed_pvalues <- c()
-  #adj.r.squared <- summary(lmod)$adj.r.squared
   
   #handles category variables
   cat_levels <- unlist(lmod$xlevels)
