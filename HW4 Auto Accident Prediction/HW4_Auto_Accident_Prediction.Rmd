@@ -780,7 +780,7 @@ plot(bk_elim_transf_vars_roc, add = T, col = "blue", lty = 3)
 plot(BIC_transf_var_glm_roc, add = T, col = "orange", lty = 3)
 ```
 
-#SELECT MODELS
+# 4. SELECT MODELS
 
 ##Evaluate Linear Models
 
