@@ -4,11 +4,13 @@ subtitle: "Homework 4 Linear & Binary Logistic Regression"
 author: "Kyle Gilde"
 date: "4/16/2018"
 output: 
-  prettydoc::html_pretty:
-    theme: cayman
-    highlight: github
+  pdf_document:
+    df_print: kable
+    #always_allow_html: yes
+
     toc: true
-    toc_depth: 3
+    toc_depth: 2
+geometry: margin=2cm
 
 ---
 
@@ -48,6 +50,8 @@ packages <- c("prettydoc","tidyverse", "caret", "pROC", "DT", "knitr", "ggthemes
 #table(load_install(packages))
 
 data.frame(load_install(packages)) 
+
+set.seed(5)
 ```
 
 #Overview
@@ -133,9 +137,9 @@ summary_metrics <- function(df){
 
 metrics_df <- summary_metrics(train_data)
 
-datatable(round(metrics_df, 2), options = list(searching = F, paging = F))
+# datatable(round(metrics_df, 2), options = list(searching = F, paging = F))
 
-#kable(metrics_df, digits = 1, format.args = list(big.mark = ',', scientific = F, drop0trailing = T))
+kable(metrics_df, digits = 1, format.args = list(big.mark = ',', scientific = F, drop0trailing = T))
 
 ```
 
@@ -205,7 +209,7 @@ The following characteristics significantly decrease the center of accident cost
 
 + Having no claims in the last five years (`CLM_FRQ`) or not having had your licence revoked (`REVOKED`)
 
-+ Having 1 or less motor vehicle points
++ Having 1 or less motor vehicle points (`MVR_PTS`)
 
 ```{r boxes, fig.width = 11, fig.height = 11}
 ####Side-by-Side Boxplots
@@ -236,7 +240,7 @@ Let's take a look at the relationships between our continuous variables. I have 
 
 + In the histograms along the diagonal, other than `OLDCLAIM`, there are not severely different distributions between the 2 types of customers represented by `TARGET_FLAG`. The variables `BLUEBOOK` and `CAR_AGE` are bimodal & may benefit from transformations.
 
-+ The side-by-side density plots in the 1st column reveal that `INCOME` appears to be higher for customers who have had an accident. In our models, let's see if this variable defies conventional wisdom is positively correlated with accidents.
++ The side-by-side density plots in the 1st column reveal that `INCOME` appears to be higher for customers who have had an accident. In our models, let's see if this variable defies conventional wisdom and is positively correlated with accidents.
 
 + Next, let's take a look at the scatterplots in the 2nd column from the left where our continuous response variable `TARGET_AMT` is plotted against the other predictor variables. We don't see any pronounced positive or negative relationships. However, we see evidence that we may be able to make these relationships more linear by transforming `TARGET_AMT`.
 
@@ -253,6 +257,7 @@ continuous_vars <-
 
 memory.limit(size = 20000)
 
+if (!exists("binary_plot")){
 binary_plot <- GGally::ggpairs(
   na.omit(continuous_vars),
   mapping = ggplot2::aes(color = TARGET_FLAG),
@@ -268,16 +273,35 @@ binary_plot <- GGally::ggpairs(
         strip.background = element_rect(fill = "grey85", color = NA),
         #plot.margin = margin(.1, .1, .1, .1, "cm"),
         panel.border = element_rect(color = "grey85", fill=NA, size= unit(.5, 'pt')))
-
+}
 binary_plot
 #http://ggobi.github.io/ggally/#columns_and_mapping
 
 ```
 
 
+```{r , fig.width = 12, fig.height = 12, echo=F, warning=F, error=F, message=F}
+# train_melted <- continuous_vars %>% 
+#   mutate(TARGET_FLAG = as.integer(TARGET_FLAG) - 1) %>% 
+#   dplyr::select(-TARGET_AMT) %>% 
+#   reshape::melt(id.vars = "TARGET_FLAG") 
+#   
+# 
+# na.omit(train_melted) %>%
+#   ggplot(aes(x = value, y = TARGET_FLAG)) +
+#   geom_point(position = position_jitter(height=.2, width=.2), 
+#              alpha = .1, 
+#              aes(color = TARGET_FLAG)
+#              ) + 
+#   geom_smooth(method = "glm", method.args = list(family = "binomial")) +
+#   facet_wrap(~ variable, scales = "free") 
+```
+
+
+
 ### Correlations
 
-As we noted above, none of the variable pairs have strong correlations. `YOJ` and `INCOME` are the most correlated at .31. We will likely not have collinearity among our original variables.
+As we noted above, none of the variable pairs appear to have strong linear correlations. `YOJ` and `INCOME` are the most correlated at .31. We will likely not have collinearity among our original variables.
 
 
 ```{r fig.width = 11, fig.height = 11, echo=F}
@@ -322,7 +346,7 @@ Let's see how our missing variables are distributed.
 
 + The variables for the age of the car `CAR_AGE` and years on the job `YOJ` are missing about 6% and 5% of their values. The customer age variable (`AGE`) is missing only 6 values. Otherwise, 88% of the cases are complete.
 
-+ Upon closer inspection, the `JOB` variable actually does not contain `NA`s. It does have a "blank" value. It's unclear whether the observation is missing. We will consider either replacing it with UNKNOWN or imputing it.
++ Upon closer inspection, the `JOB` variable actually does not contain `NA`s. It does have a "blank" value. It's unclear whether the observation is missing. We will consider either replacing it with "Unknown" or imputing it.
 
 + We should be able to use the other demographic variables to make reasonable imputations for these missing values.
 
@@ -344,7 +368,7 @@ summary(missing_plot)
 
 Let's use the `missForest` package to do nonparametric missing-value imputation using Random Forest on both the training and evaluation sets. We will set the impossible -3 `CAR_AGE` value to `NA` as well.
 
-When we use the out-of-the-bag error in order to calculate the normalized root mean-squares error, we see NRMSE values near zero, which indicates that we have well-fitted imputations.
+When we use the out-of-the-bag error in order to calculate the normalized root mean-squares error, we see NRMSE values closer to zero than not, which indicates that we have well-fitted imputations.
 
 ```{r impute, echo=F, results=F}
 # 2. DATA PREPARATION
@@ -383,7 +407,7 @@ kable(impute_df, digits = 2)
 
 ## Variable Transformations
 
-We will use the distribution differences seen in the side-by-side box plots to create the following new dummy variables. In our modeling, if they end up being statistically significant, we may be able to create more parsimonious models with fewer dummy variables created from the many-value categorical variables.
+We will use the distribution differences seen in the side-by-side box plots to create the following new dummy variables. In order to avoid singularity issues, these new variables will replace their corresponding many-value categorical variables. We will run models using both the original variable set and the new variable data set to see which performs better.
 
 + `NOHOMEKIDS`, `NOKIDSDRIV`, `HASCOLLEGE`, `ISPROFESSIONAL`, `ISMINIVAN`
 
@@ -412,7 +436,7 @@ train_transformed <-
 
 ### LM #1: Original Variables with BIC Selection
 
-In our first model, we will use BIC forward and backward selection on the original variables with the missing values imputed. Twenty-six of the model variables were removed, leaving a model with eleven statically significant variables. In this model, being a single parent `PARENT1Yes` on average increases the cost of the accidencts the most, and only usin the vehicle for non-commercial purposes decreases the response variable the most. Despite having the highest correlation with the response variable `OLDCLAIM` was not statically significant. However, the model's adjusted R-squared is incredibly small at .06. This model does not account for very much of the variation in the cost of the accident `TARGET_AMT`.
+In our first model, we will use BIC forward and backward selection on the original variables with the missing values imputed. Twenty-six of the model variables were removed, leaving a model with eleven statically significant variables. In this model, being a single parent `PARENT1Yes` on average increases the cost of the accidents the most, and only using the insured vehicle for non-commercial purposes decreases the response variable the most. Despite having the highest correlation with the response variable `OLDCLAIM` was not statically significant. However, the model's adjusted R-squared is incredibly small at .06. This model does not account for very much of the variation in the cost of the accident `TARGET_AMT`.
 
 ```{r BIC_orig_var_lm}
 # 3. BUILD MODELS
@@ -473,8 +497,8 @@ lm_evaluation <- function(lmod) {
         fstat = f[1],
         p.value = formatC(pf(f[1], f[2], f[3], lower.tail = F), format = "e", digits = 2),
         adj.r.squared = lm_summary$adj.r.squared,
-        pre.r.squared = pred_r_squared(lmod),
-        rmse = as.numeric(DMwR::regr.eval(lmod$model[1], fitted(lmod), stats = c("rmse")))
+        pre.r.squared = pred_r_squared(lmod)#,
+        #rmse = as.numeric(DMwR::regr.eval(lmod$model[1], fitted(lmod), stats = c("rmse")))
         
         )
     return(df_summary)
@@ -482,7 +506,6 @@ lm_evaluation <- function(lmod) {
 
 lm_diagnotics <- function(lmod){
   diag_df <- data.frame(
-   # lmod <- BIC_orig_var_lm
     DW.test = car::durbinWatsonTest(lmod)$p,
     NCV.test = car::ncvTest(lmod)$p,
     AD.test = formatC(nortest::ad.test(lmod$residuals)$p.value, format = "e", digits = 2),
@@ -511,7 +534,7 @@ plot(BIC_orig_var_lm)
 
 ### LM #2: Transformed Variables with BIC Selection
 
-Our second model applied the same BIC selection processed to the transformed variable set with five new variables. This version contains one more variable than the previous model, and it found three of the new variables to be statistically significant. However, adjusted R-squared is only slightly higher than the first model and still remains tiny.
+Our second model applied the same BIC selection processed to the transformed variable set with the five new variables. This version of the BIC model contains one more variable than the previous model, and it found three of the new variables to be statistically significant. However, adjusted R-squared is only slightly higher than the first model and still remains tiny.
 
 
 ```{r BIC_transf_var_lm}
@@ -527,7 +550,7 @@ summary(BIC_transf_var_lm)
 
 #evaluate performance & diagnostics
 model_eval <- lm_evaluation(BIC_transf_var_lm)
-model_diag <- lm_diagnotics(BIC_transf_var_lm)
+model_diag <- lm_diagnotics(BIC_transf_var_lm) 
 lm_results <- rbind(lm_results, model_eval)
 lm_results_diagnostics <- rbind(lm_results_diagnostics, model_diag)
 ```
@@ -540,9 +563,9 @@ plot(BIC_transf_var_lm)
 
 ```
 
-### LM #3: BIC Selection with Negative Box-Cox Transformation & Transformed Variables 
+### LM #3: BIC Selection with Response Variable Transformation 
 
-Given nonnormality and kurtosis we saw earlier, let's perform a negative Box-Cox transformation on TARGET_AMT. The negative Box-Cox transformation can accommodate all of the zero values that the variable has.
+Given the nonnormality and kurtosis we saw earlier, let's see what the car packages `powerTransform` function recommends for a negative Box-Cox transformation on `TARGET_AMT`. The negative Box-Cox transformation can accommodate all of the zero values that the variable has. For the sake of simplicity, let's add one to `TARGET_AMT` and take the natural log.
 
 ```{r}
 ### LM #3: BIC Selection with Negative Box-Cox Transformation & Transformed Variables 
@@ -556,16 +579,20 @@ summary(PT)
 train_transformed_BCN <- 
   train_transformed %>% 
   mutate(
+    #TARGET_AMT = car::bcnPower(TARGET_AMT, lambda = PT$lambda, gamma = PT$gamma)
     #TARGET_AMT = VGAM::yeo.johnson(TARGET_AMT, PT$lambda)
-    TARGET_AMT = car::bcnPower(TARGET_AMT, lambda = PT$lambda, gamma = PT$gamma)
+    TARGET_AMT = log(TARGET_AMT + 1)
     #TARGET_AMT = (TARGET_AMT+PT$gamma)^PT$lambda
     #TARGET_AMT = TARGET_AMT^PT$lambda
   )
 ```
 
-Our third model will use the 2-parameter Box-Cox transformation of `TARGET_AMT` with the transformed variables. This model has four more statistically significant variables than the previous model, including all five of the transformed dummy variables we created. Moreover, adjusted R-squared is much higher at .21. This model explains much more of the variance in the response variable `TARGET_AMT`.
+Our third model will use log-transformed `TARGET_AMT` with the newly created dummy variables. This model has two more statistically significant variables than the previous model, including all five of the transformed dummy variables we created. Moreover, adjusted R-squared is much higher at .21. This model explains much more of the variance in the response variable `TARGET_AMT`.
 
 ```{r BCN}
+
+# Our third model will use the 2-parameter Box-Cox transformation of `TARGET_AMT` with the transformed variables. This model has four more statistically significant variables than the previous model, including all five of the transformed dummy variables we created. Moreover, adjusted R-squared is much higher at .21. This model explains much more of the variance in the response variable `TARGET_AMT`.
+
 BCN_lmod <- lm(TARGET_AMT~.-TARGET_FLAG, data = train_transformed_BCN)
 BIC_BCN_transf_var_lm <- step(BCN_lmod, k = log(n), trace = 0)
 summary(BIC_BCN_transf_var_lm)
@@ -573,44 +600,46 @@ summary(BIC_BCN_transf_var_lm)
 model_eval <- lm_evaluation(BIC_BCN_transf_var_lm)
 model_diag <- lm_diagnotics(BIC_BCN_transf_var_lm)
 lm_results <- rbind(lm_results, model_eval)
-lm_results_diagnostics <- rbind(lm_results_diagnostics, model_diag)
+lm_results_diagnostics <- rbind(lm_results_diagnostics, model_diag) 
 
 ```
 
-Interpreting the coefficients after performing 2-parameter Box-Cox transformation can be challenging. After attempting to take the inverse of the transformation, the model coefficients do not seem to make sense given the distribution of the `TARGET_AMT`. Further research is needed.
+After attempting to inverse the model coefficients, they still are not within the range of values we would expect given the distribution of the variables. This may require further research.
 
 ```{r BCN_inverse}
+# Interpreting the coefficients after performing 2-parameter Box-Cox transformation can be challenging. After attempting to take the inverse of the transformation, the model coefficients do not seem to make sense given the distribution of the `TARGET_AMT`. Further research is needed.
 # Inverse the transformed coefficients
-BCN_inverse <- function(U, lambda, gamma){
-  #Calculates the inverse of the negative Box-Cox transformation
-  return((U * lambda + 1)^(1/lambda) - gamma)
-  #return((U)^(1/lambda) - gamma)
-  #return((U)^(1/lambda))
-}
+# BCN_inverse <- function(U, lambda, gamma){
+#   #Calculates the inverse of the negative Box-Cox transformation
+#   return((U * lambda + 1)^(1/lambda) - gamma)
+#   #return((U)^(1/lambda) - gamma)
+#   #return((U)^(1/lambda))
+# }
 #https://stats.stackexchange.com/questions/233611/reverse-boxcox-transformation-with-negative-values?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
 #https://stackoverflow.com/questions/18464491/transforming-data-to-normality-what-is-the-best-function-for-a-given-case?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+
+# inversed_coef_df <-
+#   data.frame(var = names(coef(BIC_BCN_transf_var_lm))) %>%
+#   mutate(
+#     transformed_coef_value = coef(BIC_BCN_transf_var_lm),
+#     inversed_coef_value = BCN_inverse(transformed_coef_value, PT$lambda, PT$gamma)
+#   ) %>%
+#   arrange(-transformed_coef_value)
 
 inversed_coef_df <-
   data.frame(var = names(coef(BIC_BCN_transf_var_lm))) %>%
   mutate(
     transformed_coef_value = coef(BIC_BCN_transf_var_lm),
-    inversed_coef_value = BCN_inverse(transformed_coef_value, PT$lambda, PT$gamma)
+    inversed_coef_value = exp(transformed_coef_value) - 1
+    #inversed_coef_value = VGAM::yeo.johnson(transformed_coef_value, PT$lambda, inverse = T)
   ) %>%
   arrange(-transformed_coef_value)
-
-# inversed_coef_df <- 
-#   data.frame(var = names(coef(BIC_BCN_transf_var_lm))) %>% 
-#   mutate(
-#     transformed_coef_value = coef(BIC_BCN_transf_var_lm),
-#     inversed_coef_value = VGAM::yeo.johnson(transformed_coef_value, PT$lambda, inverse = T)
-#   ) %>% 
-#   arrange(-transformed_coef_value)
 
 kable(inversed_coef_df, digits = 2, format.args = list(big.mark = ',', scientific = F, drop0trailing = T))
 
 ```
 
-In the diagnostic plots for model #3, the Box-Cox transformation did improve the normality of our residuals. However, it made the nonconstant variance much worse.
+In the diagnostic plots for model #3, the log transformation did improve the normality of our residuals. However, it made the nonconstant variance much worse.
 
 ```{r fig.width = 10, fig.height = 10}
 par(mfrow=c(2,2))
@@ -622,7 +651,7 @@ plot(BIC_BCN_transf_var_lm)
 
 ### Binary Regression Model #1: Backward Elimination with Original Variables
 
-For our first model, let's use all of the original variables with a backward elimination process that removes the predictor with the highest p-value until all of the remaining p-values are statistically significant. This process removed seven predictors, leaving the model with 16 variables. nitrogen oxides concentration nox2 has by far the largest coefficent at 39.99. We can interpret the effect of of the variable as a unit increase in  nox2 with the other variables held constant increases the log-odds of being above the median crime rate by 39.99.
+For our first model, let's use all of the original variables with a backward elimination process that removes the predictor with the highest p-value until all of the remaining p-values are statistically significant. This process removed seven predictors, leaving the model with 16 variables. `OLDCLAIM` has the most practical significance to the model with the largest coefficient. We can interpret the effect of of the variable as a dollar increase in `OLDCLAIM`, with the other variables held constant, increases the log-odds of the customer having had a car accident by 9.9. At -7.6, `CAR_USEPrivate` decreases the odds of a customer car accident the most.
 
 
 ```{r glm1}
@@ -687,6 +716,8 @@ glm_performance <- function(model) {
 
 ```
 
+The initial model has a cross-validation accuracy of .78 and area under the receiver operating characteristic curve of .79. Having no variance inflation factor greater than four `VIF_gt_4`, this model has no substantial collinearity, and a large p-value for the Hosmer-Lemeshow goodness-of-fit test, which means that we fail to reject the null hypothesis of the model having a good fit.
+
 ```{r, fig.width = 11, fig.height = 11}
 
 kable(glm_models <- glm_performance(bk_elim_orig_vars), digits = 3)
@@ -697,17 +728,18 @@ plot(bk_elim_orig_vars_roc, legacy.axes = T, main = "Model ROCs", col = "gray", 
 #https://web.archive.org/web/20160407221300/http://metaoptimize.com:80/qa/questions/988/simple-explanation-of-area-under-the-roc-curve
 ```
 
-
 ### Binary Regression Model #2: Backward Elimination with Transformed Variables
+
+Next, let's apply the same backward elimination process to the transformed set of variables. This process removed six variables, leaving the model with 17 statistically significant variables. All five of the the newly created dummy variables were included. `OLDCLAIM` still has the largest positive coefficient, but in this model,`HOME_VAL` followed by `ISMINIVAN` decreases odds of a customer car accident the most.
+
 ```{r glm2}
 transf_var_glm <- glm(TARGET_FLAG ~ . , family = "binomial", data = dplyr::select(train_transformed, -TARGET_AMT))
 
-
 summary(bk_elim_transf_vars <- backward_elimination(transf_var_glm))
-
-
-
 ```
+
+In the second model,both the cross-validation accuracy and the area under the receiver operating characteristic curve have increased from the first model. The blue line of the area under the curve is closer to the upper right corner, indicating that this model is better at identifying true positives and negatives. The model has no substantial collinearity, and a large p-value from the Hosmer-Lemeshow goodness-of-fit test means that we fail to reject the null hypothesis of the model having a good fit.
+
 
 ```{r, fig.width = 11, fig.height = 11}
 
@@ -723,12 +755,19 @@ plot(bk_elim_transf_vars_roc, add = T, col = "blue", lty = 3)
 
 ### Binary Regression Model #3: Transformed Variables with BIC
 
+For our third model, let's apply the BIC selection process to the transformed data set. This model has two variables less than the previous one and has 15 statistically significant variables. All five of the newly created dummy variables were included.
+
+
 ```{r glm3}
 ### Binary Regression Model #3: Transformed Variables with BIC
 BIC_transf_var_glm <- step(transf_var_glm, k = log(n), trace = 0)
 summary(BIC_transf_var_glm)
 
 ```
+
+The third model essentially matches the cross-validation accuracy and the area under the receiver operating characteristic curve of the second model. The orange line of the area under the curve closely overlaps the blue line from the previous model. 
+The model has no substantial collinearity, and it has a large p-value for the Hosmer-Lemeshow goodness-of-fit test, which means that we fail to reject the null hypothesis of the model having a good fit.
+
 
 ```{r, fig.width = 11, fig.height = 11}
 glm_mod <- glm_performance(BIC_transf_var_glm)
@@ -745,9 +784,7 @@ plot(BIC_transf_var_glm_roc, add = T, col = "orange", lty = 3)
 
 ##Evaluate Linear Models
 
-Even though we still need to figure out how to inverse the negative Box-Cox transformation and interpret the model coefficients, the third model performed the best of the three. Not only is the adjusted R-squared much higher, but the predicted R-squared is nearly as high, which indicates that we have not overfit the model.
-
-
+Even though we still need to confirm how to interpret the coefficients, the third linear model performed the best of the three. Not only is the adjusted R-squared much higher, but the predicted R-squared is nearly as high, which indicates that we have not overfit the model.
 
 ```{r eval_glm}
 kable(lm_results, digits = 3, caption = "Model Summary Statistics")
@@ -755,7 +792,7 @@ kable(lm_results, digits = 3, caption = "Model Summary Statistics")
 
 ```
 
-The table contains the diagnostic statistics for the models. All three do not have collinearity issues since none of their variables' variance inflation factors were over 4. Additionally, the moderate p-values for the Durbin-Watson test of independence indicate that we fail to reject the null hypothesis of no autocorrelation. However, the small p-values for the noncontant variance test from the `car` package and the Anderson-Darling test indicate that we would reject the null hypotheses of homoscedasticity and normality.
+The table below contains the diagnostic statistics for the models. All three do not have collinearity issues since none of their variables' variance inflation factors were over 4. Additionally, the moderate p-values for the Durbin-Watson test of independence indicate that we fail to reject the null hypothesis of no autocorrelation. However, the small p-values for the noncontant variance test from the `car` package and the Anderson-Darling test indicate that we would reject the null hypotheses of homoscedasticity and normality.
 
 ```{r}
 kable(lm_results_diagnostics, digits = 3, caption = "Model Summary Statistics") 
@@ -763,6 +800,8 @@ kable(lm_results_diagnostics, digits = 3, caption = "Model Summary Statistics")
 
 
 ## Evaluate Binary Regression Models
+
+The third BIC model's cross-validation accuracy and AUC performed has well as second model, but it was more parsimonious with two fewer variables.
 
 ```{r}
 kable(glm_models, digits = 3, caption = "Model Summary Statistics") 
@@ -772,11 +811,11 @@ kable(glm_models, digits = 3, caption = "Model Summary Statistics")
 
 ##Confusion Matrix Metrics
 
-While the BIC model performs the worst on several of confusion matrix metrics, it is by only **neglible** amounts.
+The second and third models performed nearly the same across the spectrum of classification metrics. We would only consider choosing the first model with its highest specificity if the issurance company was most concerned about avoiding false negatives. 
 
 The **strengths of the BIC model** include the following:
  
-+ With only 8 variables, it is the most parsimonious.
++ With only 15 variables, it is the most parsimonious.
 
 + It passes the Hosmer-Lemeshow goodness-of-fit test.
 
@@ -822,7 +861,7 @@ ggplot(data = confusion_metrics_melted, aes(x = model, y = value)) +
 
 ### Influence Leverage Values
 
-However, a plot of the Standardized Deviance Values against the leverage values shows that we have several observations greater than twice the average leverage value. This indicates that there may be other possible variable transformations that we have not considered.
+However, a plot of the Standardized Deviance Residuals against the leverage values shows that we have several observations greater than twice the average leverage value. This indicates that there may be other possible variable transformations that we have not considered.
 
 ```{r leverage}
 # influential leverage values
@@ -845,15 +884,37 @@ abline(v = 2 * average_leverage, lty = 2)
 
 ### Marginal Model Plots
 
-The marginal model plots of the response variable versus the predictors and the fitted response values show that the model closely aligns with the smooth fit function.  
+The marginal model plots of the response variable versus the predictors and the fitted response values show that the model fits reasonably well - although there is some deviation on the right sides of `TRAVTIME` and `MVR_PTS`.  
 
 ```{r mmps, fig.width = 11, fig.height = 11}
-if(!exists("marginal_model_plots"))
-marginal_model_plots <- car::mmps(BIC_transf_var_glm)
+if(!exists("marginal_model_plots")){marginal_model_plots <- car::mmps(BIC_transf_var_glm)}
 
 #http://support.sas.com/documentation/cdl/en/statug/68162/HTML/default/viewer.htm#statug_templt_sect027.htm
 ```
 
+Finally, when we apply the BIC model to the evalution data, it predicts that there are 204 insurance customers that would have an auto accident and 1937 that would not.
+
+```{r}
+
+levels(imputed_eval$ximp$JOB)[1] <- "Unknown"
+
+eval_transformed <- 
+  imputed_eval$ximp %>% 
+  mutate(
+    NOHOMEKIDS = as.integer(HOMEKIDS == 0),
+    NOKIDSDRIV = as.integer(KIDSDRIV == 0),
+    HASCOLLEGE = as.integer(EDUCATION %in% c("Bachelors", "Masters", "PhD")),
+    ISPROFESSIONAL = as.integer(JOB %in% c("Doctor", "Lawyer", "Manager", "Professional")),
+    ISMINIVAN = as.integer(CAR_TYPE == "Minivan")#,
+    #sqrt.TARGET_AMT = sqrt(TARGET_AMT)
+  ) %>% 
+  dplyr::select(-c(HOMEKIDS, KIDSDRIV, EDUCATION, JOB, CAR_TYPE))
+
+
+eval_results <- predict(BIC_transf_var_glm, newdata = eval_transformed)
+
+table(as.integer(eval_results > .5))
+```
 
 
 #Code Appendix
