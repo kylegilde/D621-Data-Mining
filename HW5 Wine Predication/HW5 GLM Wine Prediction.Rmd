@@ -1,0 +1,60 @@
+---
+title: "DATA 621 Business Analytics & Data Mining" 
+subtitle: "Homework 5 Poission & Negative Binomial Regression"
+author: "Kyle Gilde"
+date: "4/16/2018"
+output: 
+  pdf_document:
+    df_print: kable
+    #always_allow_html: yes
+
+    toc: true
+    toc_depth: 2
+geometry: margin=2cm
+
+---
+
+```{r knitr_options, echo=FALSE}
+
+knitr::opts_chunk$set(
+                      error = F
+                      , message = T
+                      #,tidy = T
+                      , cache = T
+                      , warning = F
+                      , echo = F
+                      )
+  # prettydoc::html_pretty:
+  #   theme: cayman
+    # highlight: github
+```
+
+
+
+```{r packages, echo=F, warning=F, message=F, results=F} 
+#Install & load packages
+
+load_install <- function(pkg){
+  # Load packages. Install them if needed.
+  # CODE SOURCE: https://gist.github.com/stevenworthington/3178163
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg)) install.packages(new.pkg, dependencies = TRUE)
+  sapply(pkg, require, character.only = TRUE, quietly = TRUE, warn.conflicts = FALSE)
+}
+
+# required packages
+packages <- c("prettydoc","tidyverse", "caret", "pROC", "DT", "knitr", "ggthemes", "Hmisc", "psych", "corrplot", "reshape2", "car", "MASS", "ResourceSelection", "boot", "tinytex", "devtools", "VIM", "GGally", "missForest", "DMwR", "nortest") 
+load_install(packages)
+```
+
+#Overview
+
+In this homework assignment, you will explore, analyze and model a data set containing information on approximately 12,000 commercially available wines. The variables are mostly related to the chemical properties of the wine being sold. The response variable is the number of sample cases of wine that were purchased by wine distribution companies after sampling a wine. These cases would be used to provide tasting samples to restaurants and wine stores around the United States. The more sample cases purchased, the more likely is a wine to be sold at a high end restaurant. A large wine manufacturer is studying the data in order to predict the number of wine cases ordered based upon the wine characteristics. If the wine manufacturer can predict the number of cases, then that manufacturer will be able to adjust their wine offering to maximize sales.
+
+Your objective is to build a count regression model to predict the number of cases of wine that will be sold given certain properties of the wine.
+
+Using the training data set, build at least two different poisson regression models, at least two different negative binomial regression models, and at least two multiple linear regression models, using different variables
+
+# 1. DATA EXPLORATION
+
+
