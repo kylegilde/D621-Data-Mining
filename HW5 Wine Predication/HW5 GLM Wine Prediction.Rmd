@@ -4,13 +4,14 @@ subtitle: "Homework 5 Poission & Negative Binomial Regression"
 author: "Kyle Gilde"
 date: "4/16/2018"
 output: 
-  pdf_document:
-    df_print: kable
-    #always_allow_html: yes
-
+  # pdf_document:
+  #   df_print: kable
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
     toc: true
     toc_depth: 2
-geometry: margin=2cm
+# geometry: margin=2cm
 
 ---
 
@@ -24,9 +25,7 @@ knitr::opts_chunk$set(
                       , warning = F
                       , echo = F
                       )
-  # prettydoc::html_pretty:
-  #   theme: cayman
-    # highlight: github
+
 ```
 
 
@@ -43,7 +42,7 @@ load_install <- function(pkg){
 }
 
 # required packages
-packages <- c("prettydoc","tidyverse", "caret", "pROC", "DT", "knitr", "ggthemes", "Hmisc", "psych", "corrplot", "reshape2", "car", "MASS", "ResourceSelection", "boot", "tinytex", "devtools", "VIM", "GGally", "missForest", "DMwR", "nortest") 
+packages <- c("prettydoc","tidyverse", "caret", "pROC", "DT", "knitr", "ggthemes", "Hmisc", "psych", "corrplot", "reshape2", "car", "MASS", "ResourceSelection", "boot", "tinytex", "VIM", "GGally", "missForest", "DMwR", "nortest") 
 load_install(packages)
 ```
 
@@ -53,8 +52,217 @@ In this homework assignment, you will explore, analyze and model a data set cont
 
 Your objective is to build a count regression model to predict the number of cases of wine that will be sold given certain properties of the wine.
 
-Using the training data set, build at least two different poisson regression models, at least two different negative binomial regression models, and at least two multiple linear regression models, using different variables
+
 
 # 1. DATA EXPLORATION
 
+```{r data}
+# import data
+train_data <- 
+  read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW5%20Wine%20Predication/wine-training-data.csv") %>% 
+  mutate(STARS = ifelse(is.na(STARS), 0, STARS)) %>% 
+  dplyr::select(-`ï..INDEX`)
+  
 
+eval_data <- 
+  read.csv("https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW5%20Wine%20Predication/wine-evaluation-data.csv") %>% 
+  mutate(STARS = ifelse(is.na(STARS), 0, STARS)) %>% 
+  dplyr::select(-IN)
+
+```
+
+## Examine the cases & variables
+
+After removing the `INDEX` column, the data set contains 15 numerical variables and 12,795 observations. Given that the `NA`s in the `STARS` variable are meaningful, we have changed those instances to zero to represent a very poor rating.
+
+```{r}
+str(train_data)
+
+```
+
+
+### Data Dictionary
+
+From the variable descriptions, we would expect that higher `LabelAppeal` and `STARS` values correspond with greater numbers of cases purchased. Simply by the variable names, we  suspect that several of the predictor variables will be  correlated with each other including:
+
++ `AcidIndex`, `CitricAcid`, `FixedAcidity` & `VolatileAcidity`
+
++ `FreeSulfurDioxide` & `TotalSulfurDioxide`
+
++ `FreeSulfurDioxide`, `Sulphates` & `TotalSulfurDioxide`
+
+![](https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW5%20Wine%20Predication/data_dict.PNG)
+
+
+
+
+### Statistical Summary
+
+In the statistical summary table below, we noticed that we may be have missing values in about half the variables. Along with `AcidIndex`, `LabelAppeal` & `STARS` , the response variable `TARGET` is discrete, which makes this data set a good candidate for count regression. Up to 7 of the variables have unexpectedly negative values. We will want to confirm that these are valid measurements of the variable. Only one variable `AcidIndex` has more kurtosis than a normal distribution.
+
+```{r metrics, fig.width = 11, fig.height = 11}
+
+summary_metrics <- function(df){
+  ###Creates summary metrics table
+  metrics_only <- df[, sapply(df, is.numeric)]
+   
+  df_metrics <- psych::describe(metrics_only, quant = c(.25,.75))
+  df_metrics$unique_values = rapply(metrics_only, function(x) length(unique(x)))
+  df_metrics <- 
+    dplyr::select(df_metrics, n, unique_values, min, Q.1st = Q0.25, median, mean, Q.3rd = Q0.75, 
+    max, range, sd, skew, kurtosis
+  )
+  return(df_metrics)
+}
+
+metrics_df <- summary_metrics(train_data)
+
+datatable(round(metrics_df, 2), options = list(searching = F, paging = F))
+
+#kable(metrics_df, digits = 1, format.args = list(big.mark = ',', scientific = F, drop0trailing = T))
+
+```
+
+## Visualizations
+
+###Discrete variables
+
+####Frequencies
+
+In the barplots below, we notice that more than 20% of the `TARGET` values are zero, which indicates that the data may be a good candidate for a zero-inflated Poisson regression model.
+
+```{r factors, fig.width = 11, fig.height = 11}
+###Discrete variables Frequencies
+discrete_vars_freq <- 
+  train_data %>% 
+  dplyr::select(rownames(metrics_df)[metrics_df$unique_values < 15]) %>% 
+  gather("var", "value") %>% 
+  group_by(var) %>% 
+  count(var, value) %>%
+  mutate(prop = prop.table(n))
+
+ggplot(data = discrete_vars_freq, 
+       aes(x = reorder(value, prop),
+       y = prop)) + 
+  geom_bar(stat = "identity", fill = "darkgreen") + 
+  facet_wrap(~var, scales = "free") +
+  coord_flip() + 
+  ggthemes::theme_fivethirtyeight()
+
+# https://stackoverflow.com/questions/34860535/how-to-use-dplyr-to-generate-a-frequency-table?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+
+```
+
+####Side-by-Side Boxplots
+
+The box plots contain the `TARGET` distributions for each of the discrete variable values. As we expected, higher values of `LabelAppeal` and `STARS` are associated with more wine being purchased. Additionally, smaller `AcidIndex` values appear to be associated with more wine purchases.
+
+```{r boxes, fig.width = 10, fig.height = 10}
+####Side-by-Side Boxplots
+boxplot_data <- 
+  train_data %>% 
+  dplyr::select(rownames(metrics_df)[metrics_df$unique_values < 15]) %>% 
+  reshape2::melt(id.vars = "TARGET")
+
+
+### Side-by-Side Boxplots
+ggplot(data = boxplot_data, aes(x = factor(value), y = TARGET)) +
+  geom_boxplot() +
+  facet_wrap( ~ variable, scales = "free") +
+  coord_flip() +
+  ggthemes::theme_fivethirtyeight()
+
+
+#Reference: https://stackoverflow.com/questions/14604439/plot-multiple-boxplot-in-one-graph?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+
+```
+
+## All Variables
+
+
+### Histograms of Continuous Variables
+
++ The proportion of large residential lots `zn` is very skewed or is bimodal, and it may benefit from a  transformation.
+
+```{r hist, fig.width = 11, fig.height = 11, echo=F}
+#Predictor histograms
+train_melted <- 
+  train_data %>% 
+  dplyr::select(rownames(metrics_df)[metrics_df$unique_values >= 15]) %>% 
+  reshape::melt() %>% 
+  na.omit() 
+  
+ggplot(data = train_melted, aes(x = value)) + 
+  geom_histogram() + 
+  facet_wrap(~variable, scales = "free")
+
+#https://www3.nd.edu/~steve/computing_with_data/13_Facets/facets.html
+
+```
+
+
+
+### Correlations
+
+As we noted above, none of the variable pairs appear to have strong linear correlations. `YOJ` and `INCOME` are the most correlated at .31. We will likely not have collinearity among our original variables.
+
+
+```{r fig.width = 11, fig.height = 11, echo=F}
+##CORRELATIONS
+#correlation matrix
+cm <- cor(train_data, use = "pairwise.complete.obs")
+
+#plot
+corrplot(cm, method = "square", type = "upper")
+
+#find the top correlations
+correlations <- c(cm[upper.tri(cm)])
+
+cor_df <- 
+  data.frame(Var1 = rownames(cm)[row(cm)[upper.tri(cm)]],
+             Var2 = colnames(cm)[col(cm)[upper.tri(cm)]],
+             Correlation = correlations,
+             Rsquared = correlations^2
+             ) %>% 
+  arrange(-Rsquared)
+
+#Reference: https://stackoverflow.com/questions/28035001/transform-correlation-matrix-into-dataframe-with-records-for-each-row-column-pai
+
+kable(head(cor_df, 10), digits = 2, row.names = T, caption = "Top Correlated Variable Pairs")
+```
+
+
+
+
+The correlation coefficents with the response variable `TARGET_AMT` are even weaker. `OLDCLAIM` is only correlated with the response variable at .11.  
+
+```{r corrTarget}
+#Corrrelations with TARGET
+TARGET_AMT_corr <- subset(cor_df, Var2 == "TARGET" | Var1 == "TARGET")
+rownames(TARGET_AMT_corr) <- 1:nrow(TARGET_AMT_corr)
+
+kable(head(TARGET_AMT_corr, 5), digits = 2, row.names = T, caption = "Top Corrrelations with the Response Variable")
+```
+
+## Missing Values
+
+```{r missing, fig.width=11, fig.height=11, results=F}
+## Missing Values
+options(scipen = 999)
+missing_plot <- VIM::aggr(train_data,  
+                      numbers = T, 
+                      sortVars = T,
+                      col = c("lightgreen", "darkred", "orange"),
+                      labels=str_sub(names(train_data), 1, 8), 
+                      ylab=c("Missing Value Counts"
+                             , "Pattern"))
+
+
+summary(missing_plot)
+```
+
+
+
+# 3. BUILD MODELS
+
+Using the training data set, build at least two different poisson regression models, at least two different negative binomial regression models, and at least two multiple linear regression models, using different variables
