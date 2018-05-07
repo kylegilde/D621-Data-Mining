@@ -42,7 +42,7 @@ load_install <- function(pkg){
 }
 
 # required packages
-packages <- c("prettydoc","tidyverse", "caret", "pROC", "DT", "knitr", "ggthemes", "Hmisc", "psych", "corrplot", "reshape2", "car", "MASS", "ResourceSelection", "boot", "tinytex", "VIM", "GGally", "missForest", "DMwR", "nortest") 
+packages <- c("prettydoc","tidyverse", "caret", "pROC", "DT", "knitr", "ggthemes", "Hmisc", "psych", "corrplot", "reshape2", "car", "MASS", "ResourceSelection", "boot", "tinytex", "VIM", "GGally", "missForest", "DMwR", "nortest", "DescTools") 
 load_install(packages)
 ```
 
@@ -92,9 +92,6 @@ From the variable descriptions, we would expect that higher `LabelAppeal` and `S
 + `FreeSulfurDioxide`, `Sulphates` & `TotalSulfurDioxide`
 
 ![](https://raw.githubusercontent.com/kylegilde/D621-Data-Mining/master/HW5%20Wine%20Predication/data_dict.PNG)
-
-
-
 
 ### Statistical Summary
 
@@ -216,32 +213,136 @@ cm <- cor(train_data, use = "pairwise.complete.obs")
 corrplot(cm, method = "square", type = "upper")
 
 #find the top correlations
-correlations <- c(cm[upper.tri(cm)])
-
-cor_df <- 
-  data.frame(Var1 = rownames(cm)[row(cm)[upper.tri(cm)]],
+correlation_df <- function(cm){
+  #Creates a df of pairwise correlations
+  correlations <- c(cm[upper.tri(cm)])
+  cor_df <- data.frame(
+             Var1 = rownames(cm)[row(cm)[upper.tri(cm)]],
              Var2 = colnames(cm)[col(cm)[upper.tri(cm)]],
              Correlation = correlations,
              Rsquared = correlations^2
-             ) %>% 
-  arrange(-Rsquared)
+       ) %>% 
+    arrange(-Rsquared)
+  return(cor_df)
+}
+
+cor_df <- correlation_df(cm)
 
 #Reference: https://stackoverflow.com/questions/28035001/transform-correlation-matrix-into-dataframe-with-records-for-each-row-column-pai
 
 kable(head(cor_df, 10), digits = 2, row.names = T, caption = "Top Correlated Variable Pairs")
 ```
 
-
-
-
 The correlation coefficents with the response variable `TARGET_AMT` are even weaker. `OLDCLAIM` is only correlated with the response variable at .11.  
 
 ```{r corrTarget}
-#Corrrelations with TARGET
-TARGET_AMT_corr <- subset(cor_df, Var2 == "TARGET" | Var1 == "TARGET")
-rownames(TARGET_AMT_corr) <- 1:nrow(TARGET_AMT_corr)
+memory.limit(size = 16000)
+#Corrrelations with Transformations with TARGET
+# pred_vars <- dplyr::select(train_data, -TARGET)
+# 
+# #squared variables
+# squared_vars <- 
+#   apply(pred_vars, 2, function(x) x^2) %>% 
+#   as.data.frame()
+# colnames(squared_vars) <- paste0(names(squared_vars), "2")
+# 
+# #squart root variables
+# sqrt_vars <- 
+#   apply(pred_vars, 2, function(x) x^2) %>% 
+#   as.data.frame()
+# colnames(sqrt_vars) <- paste0(names(sqrt_vars), "_sqrt")
+# 
+# #log variables
+# log_vars <- 
+#   apply(pred_vars, 2, function(x) log(x + .01)) %>% 
+#   as.data.frame()
+# colnames(log_vars) <- paste0(names(log_vars), "_log")
+# 
+# some_vars <- cbind(squared_vars, sqrt_vars, log_vars, train_data)
+# 
+# #interaction variables
+# iteraction_vars <- data.frame(t(apply(some_vars, 1, combn, 2, prod)))
+# colnames(iteraction_vars) <- combn(names(some_vars), 2, paste, collapse=".")
+# 
+# all_vars <- 
+#   iteraction_vars %>% 
+#   mutate(
+#     TARGET_sqrt = sqrt(train_data$TARGET),
+#     TARGET2 = train_data$TARGET^2,
+#     TARGET_log = log(train_data$TARGET + .01)
+#     )
+# str(all_vars)
+# 
+# # reorder columns
+# all_vars <- 
+#   cbind(all_vars[, str_detect(names(all_vars), "TARGET")],
+#         all_vars[, !str_detect(names(all_vars), "TARGET")])
+# 
+# str(all_vars)
+# # create correlation df
+# all_corr <- 
+#   all_vars %>% 
+#   cor(use = "pairwise.complete.obs") %>% 
+#   correlation_df() %>% 
+#   subset((Var2 %like% "%TARGET%" | Var1  %like%  "%TARGET%") 
+#          & !(Var2 %like% "%TARGET%" & Var1  %like%  "%TARGET%"))
 
-kable(head(TARGET_AMT_corr, 5), digits = 2, row.names = T, caption = "Top Corrrelations with the Response Variable")
+#squared variables
+squared_vars <-
+  apply(train_data, 2, function(x) x^2) %>%
+  as.data.frame()
+colnames(squared_vars) <- paste0(names(squared_vars), "2")
+
+#squart root variables
+sqrt_vars <-
+  apply(train_data, 2, function(x) x^2) %>%
+  as.data.frame()
+colnames(sqrt_vars) <- paste0(names(sqrt_vars), "_sqrt")
+
+#log variables
+log_vars <-
+  apply(train_data, 2, function(x) log(x + .01)) %>%
+  as.data.frame()
+colnames(log_vars) <- paste0(names(log_vars), "_log")
+
+pred_vars <- dplyr::select(train_data, -TARGET)
+
+some_vars <- cbind(squared_vars, sqrt_vars, log_vars, train_data)
+
+#interaction variables
+iteraction_vars <- data.frame(t(apply(some_vars, 1, combn, 2, prod)))
+colnames(iteraction_vars) <- combn(names(some_vars), 2, paste, collapse=".")
+
+str(iteraction_vars)
+
+# combine all dfs
+all_vars <-
+  cbind(iteraction_vars, squared_vars, sqrt_vars, log_vars, train_data)
+str(all_vars)
+# reorder columns
+all_vars <-
+  cbind(all_vars[, str_detect(names(all_vars), "TARGET")],
+        all_vars[, !str_detect(names(all_vars), "TARGET")])
+
+str(all_vars)
+# create correlation df
+all_corr <-
+  all_vars %>%
+  cor(use = "pairwise.complete.obs") %>%
+  correlation_df() %>%
+  subset((Var2 %like% "%TARGET%" | Var1  %like%  "%TARGET%")
+         & !(Var2 %like% "%TARGET%" & Var1  %like%  "%TARGET%"))
+
+# remove duplicated predictors
+all_corr <- all_corr[!duplicated(all_corr[, 2]),]
+
+
+rownames(all_corr) <- 1:nrow(all_corr)
+
+kable(head(all_corr, 200), digits = 2, row.names = T, caption = "Top Corrrelations with the Response Variable")
+##https://stackoverflow.com/questions/35891340/row-wise-sorting-in-r?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+##https://stackoverflow.com/questions/2080774/generating-interaction-variables-in-r-dataframes?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+
 ```
 
 ## Missing Values
