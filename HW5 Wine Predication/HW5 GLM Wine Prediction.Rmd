@@ -2,7 +2,7 @@
 title: "DATA 621 Business Analytics & Data Mining" 
 subtitle: "Homework 5 Poission & Negative Binomial Regression"
 author: "Kyle Gilde"
-date: "4/16/2018"
+date:  "`r format(Sys.time(), '%B %d, %Y')`"
 output: 
   # pdf_document:
   #   df_print: kable
@@ -10,7 +10,7 @@ output:
     theme: cayman
     highlight: github
     toc: true
-    toc_depth: 2
+    toc_depth: 3
 # geometry: margin=2cm
 
 ---
@@ -24,6 +24,7 @@ knitr::opts_chunk$set(
                       , cache = T
                       , warning = F
                       , echo = F
+                      #, fig.show = hold
                       )
 
 ```
@@ -33,7 +34,7 @@ knitr::opts_chunk$set(
 ```{r packages, echo=F, warning=F, message=F, results=F} 
 #Install & load packages
 
-load_install <- function(pkg){
+install_load <- function(pkg){
   # Load packages. Install them if needed.
   # CODE SOURCE: https://gist.github.com/stevenworthington/3178163
   new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
@@ -42,8 +43,8 @@ load_install <- function(pkg){
 }
 
 # required packages
-packages <- c("prettydoc","tidyverse", "caret", "pROC", "DT", "knitr", "ggthemes", "Hmisc", "psych", "corrplot", "reshape2", "car", "MASS", "ResourceSelection", "boot", "tinytex", "VIM", "GGally", "missForest", "DMwR", "nortest", "DescTools") 
-load_install(packages)
+packages <- c("prettydoc","tidyverse", "caret", "pROC", "DT", "knitr", "ggthemes", "Hmisc", "psych", "corrplot", "reshape2", "car", "MASS", "ResourceSelection", "boot", "tinytex", "VIM", "GGally", "missForest", "DMwR", "nortest", "DescTools", "pscl") 
+install_load(packages)
 ```
 
 #Overview
@@ -95,7 +96,7 @@ From the variable descriptions, we would expect that higher `LabelAppeal` and `S
 
 ### Statistical Summary
 
-In the statistical summary table below, we noticed that we may be have missing values in about half the variables. Along with `AcidIndex`, `LabelAppeal` & `STARS` , the response variable `TARGET` is discrete, which makes this data set a good candidate for count regression. Up to 7 of the variables have unexpectedly negative values. We will want to confirm that these are valid measurements of the variable. Only one variable `AcidIndex` has more kurtosis than a normal distribution.
+In the statistical summary table below, we notice that we may be have missing values in about half the variables. Along with `AcidIndex`, `LabelAppeal` & `STARS`, the response variable `TARGET` is discrete, which makes this data set a good candidate for count regression. Up to 7 of the variables have unexpectedly negative values. We will want to confirm that these are valid measurements of the variable. Only one variable `AcidIndex` has more kurtosis than a normal distribution.
 
 ```{r metrics, fig.width = 11, fig.height = 11}
 
@@ -122,9 +123,7 @@ datatable(round(metrics_df, 2), options = list(searching = F, paging = F))
 
 ## Visualizations
 
-###Discrete variables
-
-####Frequencies
+###Discrete Variable Frequencies
 
 In the barplots below, we notice that more than 20% of the `TARGET` values are zero, which indicates that the data may be a good candidate for a zero-inflated Poisson regression model.
 
@@ -150,7 +149,7 @@ ggplot(data = discrete_vars_freq,
 
 ```
 
-####Side-by-Side Boxplots
+### Discrete Variable Boxplots
 
 The box plots contain the `TARGET` distributions for each of the discrete variable values. As we expected, higher values of `LabelAppeal` and `STARS` are associated with more wine being purchased. Additionally, smaller `AcidIndex` values appear to be associated with more wine purchases.
 
@@ -174,14 +173,11 @@ ggplot(data = boxplot_data, aes(x = factor(value), y = TARGET)) +
 
 ```
 
-## All Variables
-
-
 ### Histograms of Continuous Variables
 
-+ The proportion of large residential lots `zn` is very skewed or is bimodal, and it may benefit from a  transformation.
++ The distributions of the continuous predictor variables all share a strong resemblance. They are platykurtic, meaning they have smaller tails and greater peaks than the normal distribution.
 
-```{r hist, fig.width = 11, fig.height = 11, echo=F}
+```{r hist, fig.width = 11, fig.height = 11, echo=F, warning=F}
 #Predictor histograms
 train_melted <- 
   train_data %>% 
@@ -190,7 +186,7 @@ train_melted <-
   na.omit() 
   
 ggplot(data = train_melted, aes(x = value)) + 
-  geom_histogram() + 
+  geom_histogram(bins = 30) + 
   facet_wrap(~variable, scales = "free")
 
 #https://www3.nd.edu/~steve/computing_with_data/13_Facets/facets.html
@@ -201,7 +197,7 @@ ggplot(data = train_melted, aes(x = value)) +
 
 ### Correlations
 
-As we noted above, none of the variable pairs appear to have strong linear correlations. `YOJ` and `INCOME` are the most correlated at .31. We will likely not have collinearity among our original variables.
+Very few of the predictors are correlated with the response variable. As we would expect from the previous boxplots, `STARS` and `LabelAppeal` have moderate positive correlations with `TARGET`, and `AcidIndex` has a slight negative correlation. Additionally, very few of the predictor variables are correlated with each other, suggesting that our models will not have much multicollinearity. `STARS` is only slightly correlated with `LabelAppeal` and `AcidIndex`.
 
 
 ```{r fig.width = 11, fig.height = 11, echo=F}
@@ -226,126 +222,78 @@ correlation_df <- function(cm){
   return(cor_df)
 }
 
-cor_df <- correlation_df(cm)
+#cor_df <- correlation_df(cm)
+#kable(head(cor_df, 10), digits = 2, row.names = T, caption = "Top Correlated Variable Pairs")
 
 #Reference: https://stackoverflow.com/questions/28035001/transform-correlation-matrix-into-dataframe-with-records-for-each-row-column-pai
-
-kable(head(cor_df, 10), digits = 2, row.names = T, caption = "Top Correlated Variable Pairs")
 ```
 
-The correlation coefficents with the response variable `TARGET_AMT` are even weaker. `OLDCLAIM` is only correlated with the response variable at .11.  
+
 
 ```{r corrTarget}
-memory.limit(size = 16000)
-#Corrrelations with Transformations with TARGET
-# pred_vars <- dplyr::select(train_data, -TARGET)
-# 
-# #squared variables
-# squared_vars <- 
-#   apply(pred_vars, 2, function(x) x^2) %>% 
-#   as.data.frame()
-# colnames(squared_vars) <- paste0(names(squared_vars), "2")
-# 
-# #squart root variables
-# sqrt_vars <- 
-#   apply(pred_vars, 2, function(x) x^2) %>% 
-#   as.data.frame()
-# colnames(sqrt_vars) <- paste0(names(sqrt_vars), "_sqrt")
-# 
-# #log variables
-# log_vars <- 
-#   apply(pred_vars, 2, function(x) log(x + .01)) %>% 
-#   as.data.frame()
-# colnames(log_vars) <- paste0(names(log_vars), "_log")
-# 
-# some_vars <- cbind(squared_vars, sqrt_vars, log_vars, train_data)
-# 
-# #interaction variables
-# iteraction_vars <- data.frame(t(apply(some_vars, 1, combn, 2, prod)))
-# colnames(iteraction_vars) <- combn(names(some_vars), 2, paste, collapse=".")
-# 
-# all_vars <- 
-#   iteraction_vars %>% 
-#   mutate(
-#     TARGET_sqrt = sqrt(train_data$TARGET),
-#     TARGET2 = train_data$TARGET^2,
-#     TARGET_log = log(train_data$TARGET + .01)
-#     )
-# str(all_vars)
-# 
-# # reorder columns
-# all_vars <- 
-#   cbind(all_vars[, str_detect(names(all_vars), "TARGET")],
-#         all_vars[, !str_detect(names(all_vars), "TARGET")])
-# 
-# str(all_vars)
-# # create correlation df
-# all_corr <- 
-#   all_vars %>% 
-#   cor(use = "pairwise.complete.obs") %>% 
-#   correlation_df() %>% 
-#   subset((Var2 %like% "%TARGET%" | Var1  %like%  "%TARGET%") 
-#          & !(Var2 %like% "%TARGET%" & Var1  %like%  "%TARGET%"))
+### CORRELATIONS WITH RESPONSE
+pred_vars <- dplyr::select(train_data, -TARGET)
 
 #squared variables
 squared_vars <-
-  apply(train_data, 2, function(x) x^2) %>%
+  apply(pred_vars, 2, function(x) x^2) %>%
   as.data.frame()
 colnames(squared_vars) <- paste0(names(squared_vars), "2")
 
 #squart root variables
 sqrt_vars <-
-  apply(train_data, 2, function(x) x^2) %>%
+  apply(pred_vars, 2, function(x) x^2) %>%
   as.data.frame()
 colnames(sqrt_vars) <- paste0(names(sqrt_vars), "_sqrt")
 
 #log variables
 log_vars <-
-  apply(train_data, 2, function(x) log(x + .01)) %>%
+  apply(pred_vars, 2, function(x) log(x + .01)) %>%
   as.data.frame()
 colnames(log_vars) <- paste0(names(log_vars), "_log")
 
-pred_vars <- dplyr::select(train_data, -TARGET)
 
-some_vars <- cbind(squared_vars, sqrt_vars, log_vars, train_data)
+individual_vars <- cbind(squared_vars, sqrt_vars, log_vars, pred_vars)
 
 #interaction variables
-iteraction_vars <- data.frame(t(apply(some_vars, 1, combn, 2, prod)))
-colnames(iteraction_vars) <- combn(names(some_vars), 2, paste, collapse=".")
+all_interactions <- data.frame(t(apply(individual_vars, 1, combn, 2, prod)))
+colnames(all_interactions) <- combn(names(individual_vars), 2, paste, collapse=":")
 
-str(iteraction_vars)
 
-# combine all dfs
-all_vars <-
-  cbind(iteraction_vars, squared_vars, sqrt_vars, log_vars, train_data)
-str(all_vars)
-# reorder columns
-all_vars <-
-  cbind(all_vars[, str_detect(names(all_vars), "TARGET")],
-        all_vars[, !str_detect(names(all_vars), "TARGET")])
+all_predictors <- cbind(pred_vars, all_interactions)
 
-str(all_vars)
+# response variable transformations
+dep_vars <- 
+  train_data %>% 
+  transmute(
+    TARGET = TARGET,
+    TARGET2 = TARGET^2,
+    TARGET_sqrt = sqrt(TARGET),
+    TARGET_log = log(TARGET + .01)
+  )
+
 # create correlation df
-all_corr <-
-  all_vars %>%
-  cor(use = "pairwise.complete.obs") %>%
+all_corr <-  
+  cor(dep_vars, all_predictors, use = "pairwise.complete.obs") %>% 
   correlation_df() %>%
-  subset((Var2 %like% "%TARGET%" | Var1  %like%  "%TARGET%")
+  filter((Var2 %like% "%TARGET%" | Var1  %like%  "%TARGET%")
          & !(Var2 %like% "%TARGET%" & Var1  %like%  "%TARGET%"))
 
-# remove duplicated predictors
-all_corr <- all_corr[!duplicated(all_corr[, 2]),]
-
-
-rownames(all_corr) <- 1:nrow(all_corr)
-
-kable(head(all_corr, 200), digits = 2, row.names = T, caption = "Top Corrrelations with the Response Variable")
-##https://stackoverflow.com/questions/35891340/row-wise-sorting-in-r?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
 ##https://stackoverflow.com/questions/2080774/generating-interaction-variables-in-r-dataframes?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
 
 ```
 
-## Missing Values
+In the table below, we see the results of the correlations between the response variable and the log-, square- and square-root-transformed predictors and interactions. None of these combinations are more correlated than the original variables themselves.
+
+```{r vizTargetCorr}
+rownames(all_corr) <- 1:nrow(all_corr)
+
+kable(head(filter(all_corr, Var1 == "TARGET"), 20), digits = 3, row.names = T, caption = "Top Corrrelations with the Response Variable")
+```
+
+### Missing Values
+
+In the plots and table below, we can see that 7 variables are missing values and that only 68% of the observations are complete. Since most of the predictors are not correlated with each other, it may be difficult to accurately impute the missing values.
 
 ```{r missing, fig.width=11, fig.height=11, results=F}
 ## Missing Values
@@ -360,10 +308,444 @@ missing_plot <- VIM::aggr(train_data,
 
 
 summary(missing_plot)
+
+
+```
+
+```{r missing_table}
+missing_plot$missings %>% 
+  mutate(
+    pct_missing = Count / nrow(train_data)
+    ) %>% 
+  arrange(-pct_missing) %>% 
+  filter(pct_missing > 0) %>% 
+  kable(digits = 3, row.names = T, caption = "Variables Missing Values")  
+options(scipen=0, digits=7)
+```
+
+# 2. DATA PREPARATION
+
+## Variable Transformations
+
+While our "Top Corrrelations with the Response Variable" table did not indicate that we should transform our variables, our summary statistics table did show that the following 6 varibles have impossibly negative values.
+
+```{r negvalues}
+vars_neg_values <- 
+  dplyr::select(train_data, 
+              intersect(rownames(metrics_df)[metrics_df$unique_values > 15],
+              rownames(metrics_df)[metrics_df$min < 0])
+              )
+names(vars_neg_values)
+```
+
+
+In the side-by-side boxplots below, we see that if we were to take the absolute value of the negative numbers, the distributions of the transformed negative values are mostly similar to the positive value distributions. Consequently, we will take the absolute values of these variables.
+
+```{r Transformations, fig.width=12, fig.height=12, results=F}
+vars_neg_values_melted <- 
+  vars_neg_values %>% 
+  reshape::melt() %>% 
+  na.omit() %>% 
+  mutate(sign = relevel(as.factor(ifelse(value >= 0, 1, -1)), "1"),
+         abs_value = abs(value))
+
+ggplot(data = vars_neg_values_melted, aes(x = variable, y = abs_value)) + 
+  geom_boxplot(aes(fill = sign)) + 
+  facet_wrap( ~ variable, scales = "free")
+
+train_transformed <- 
+  train_data %>% 
+  mutate(
+    FixedAcidity = abs(FixedAcidity), 
+    VolatileAcidity = abs(VolatileAcidity), 
+    CitricAcid = abs(CitricAcid),
+    ResidualSugar = abs(ResidualSugar),
+    Chlorides = abs(Chlorides),
+    FreeSulfurDioxide = abs(FreeSulfurDioxide),
+    TotalSulfurDioxide = abs(TotalSulfurDioxide),
+    Sulphates = abs(Sulphates),
+    Alcohol = abs(Alcohol))
+
+
+eval_transformed <- 
+  eval_data %>% 
+  mutate(
+    FixedAcidity = abs(FixedAcidity), 
+    VolatileAcidity = abs(VolatileAcidity), 
+    CitricAcid = abs(CitricAcid),
+    ResidualSugar = abs(ResidualSugar),
+    Chlorides = abs(Chlorides),
+    FreeSulfurDioxide = abs(FreeSulfurDioxide),
+    TotalSulfurDioxide = abs(TotalSulfurDioxide),
+    Sulphates = abs(Sulphates),
+    Alcohol = abs(Alcohol))
+```
+
+
+## Imputing the Missing Values
+
+Let's use the `missForest` package to do nonparametric missing-value imputation using Random Forest on both the training and evaluation sets. We will set the impossible -3 `CAR_AGE` value to `NA` as well.
+
+When we use the out-of-the-bag error in order to calculate the normalized root-mean-squares error, we see NRMSE values closer to zero than not, which indicates that we have well-fitted imputations.
+
+```{r impute, echo=F, results=F}
+# 2. DATA PREPARATION
+## Imputing the Missing Values
+memory.limit(size = 16000)
+
+## Imputing the Missing Values
+if (!exists("imputed_train")){
+  imputed_train <- missForest(train_transformed, variablewise = T)
+  imputed_eval <- missForest(eval_transformed, variablewise = T)
+}
 ```
 
 
 
+```{r impute_results, echo=F}
+#impute_results
+impute_df <- 
+  summary(missing_plot)$missings %>% 
+  mutate(
+    MSE = as.numeric(imputed_train$OOBerror),
+    Max = sapply(imputed_train$ximp, function(x) tryCatch(max(x), error=function(err) NA)),
+    Min = sapply(imputed_train$ximp, function(x) tryCatch(min(x), error=function(err) NA)),
+    Range = Max - Min,
+    NRMSE = sqrt(MSE)/Range
+  ) %>% 
+  filter(MSE > 0) %>% 
+  dplyr::select(-c(Max, Min, Range)) %>% 
+  arrange(-NRMSE)
+  
+
+kable(impute_df, digits = 2) 
+#http://rcompanion.org/handbook/G_14.html
+#https://stackoverflow.com/questions/14668972/catch-an-error-by-producing-na?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+```
+
 # 3. BUILD MODELS
 
 Using the training data set, build at least two different poisson regression models, at least two different negative binomial regression models, and at least two multiple linear regression models, using different variables
+
+## Linear Models
+
+### Backward Elimination 
+
+For our first model, let's use all variables in our imputed data set with a backward elimination process that removes the predictor with the highest p-value until all of the remaining p-values are statistically significant at a .05 level. As we suspected, the `STARS` variable, followed by `LabelAppeal`, has the most practical significance in the model. With the other variables held constant, for every 1 point increase in the expert wine rating, we would expect an increase of 9.8 wine cases purchased.
+
+
+```{r bkwd_elim_lmod}
+train_imputed <- imputed_train$ximp
+
+backward_elimination <- function(lmod){
+  #performs backward elimination model selection 
+  #removes variables until all remaining ones are stat-sig
+  removed_vars <- c()
+  removed_pvalues <- c()
+  
+  #handles category dummy variables
+  cat_levels <- unlist(lmod$xlevels)
+  cat_vars <- str_sub(names(cat_levels), 1, nchar(names(cat_levels)) - 1)
+  cat_var_df <- data.frame(cat_vars, 
+                           dummy_vars = str_c(cat_vars, cat_levels),
+                           stringsAsFactors = F)
+  # checks for p-values > .05 execpt for the intercept
+  while (max(summary(lmod)$coefficients[2:length(summary(lmod)$coefficients[, 4]), 4]) > .05){  
+    # find insignificant pvalue
+    pvalues <- summary(lmod)$coefficients[2:length(summary(lmod)$coefficients[, 4]), 4]
+    max_pvalue <- max(pvalues)
+    remove <- names(which.max(pvalues))
+    #if categorical dummy variable, remove the variable
+    dummy_var <- dplyr::filter(cat_var_df, dummy_vars == remove)
+    remove <- ifelse(nrow(dummy_var) > 0, dummy_var[, 1], remove)
+    #record the removed variables
+    removed_vars <- c(removed_vars, remove)
+    removed_pvalues <- c(removed_pvalues, max_pvalue)   
+    # update model
+    lmod <- update(lmod, as.formula(paste0(".~.-`", remove, "`"))) 
+  }
+  
+  print(kable(data.frame(removed_vars, removed_pvalues), digits = 3))
+  return(lmod)
+}
+
+
+all_vars_lmod <- lm(TARGET ~ ., x = T, y = T, data = train_imputed)
+                    
+bkwd_elim_lmod <- backward_elimination(all_vars_lmod)          
+
+summary(bkwd_elim_lmod)
+
+```
+
+In the model's diagnostic plots, while the Residuals-vs-Fitted plot displays what appears to be constant variance given the discrete response variable, the standardized-residual plot reveals some nonconstant variance along the fitted residuals. The Normal Q-Q plot shows that the standardized residuals are close to normality. The Leverage plot shows that we do not have any influential points.
+
+```{r bkwd_elim_diag, fig.width = 10, fig.height = 10}
+par(mfrow=c(2,2))
+plot(bkwd_elim_lmod)
+#http://data.library.virginia.edu/diagnostic-plots/
+#http://analyticspro.org/2016/03/07/r-tutorial-how-to-use-diagnostic-plots-for-regression-models/
+```
+
+With a p-value near zero, this 9-variable model is statistically significant when compared to the null hypothesis. The moderate p-value for the Durbin-Watson test of independence indicates that we fail to reject the null hypothesis of no autocorrelation. However, the small p-values for the noncontant variance test from the `car` package and the Anderson-Darling test indicate that we would reject the null hypotheses of homoscedasticity and normality. None of the variables are exhibiting collinearity with a variance inflation factor greater than 4 (`VIF_gt_4`).
+
+```{r bkwd_elim_metrics}
+PRESS <- function(linear.model) {
+  #source:  https://gist.github.com/tomhopper/8c204d978c4a0cbcb8c0#file-press-r
+  #' calculate the predictive residuals
+  pr <- residuals(linear.model)/(1 - lm.influence(linear.model)$hat)
+  #' calculate the PRESS
+  PRESS <- sum(pr^2)
+  return(PRESS)
+}
+pred_r_squared <- function(linear.model) {
+  #source: https://gist.github.com/tomhopper/8c204d978c4a0cbcb8c0#file-pred_r_squared-r
+  #' Use anova() to get the sum of squares for the linear model
+  lm.anova <- anova(linear.model)
+  #' Calculate the total sum of squares
+  tss <- sum(lm.anova$'Sum Sq')
+  # Calculate the predictive R^2
+  pred.r.squared <- 1 - PRESS(linear.model)/(tss)
+  return(pred.r.squared)
+}
+
+lm_evaluation <- function(lmod) {
+    ### Summarizes the model's key statistics in one row
+    ### https://gist.github.com/stephenturner/722049#file-pvalue-from-lm-object-r-L5
+    lm_summary <- summary(lmod)
+    f <- as.numeric(lm_summary$fstatistic)
+
+    df_summary <- 
+      data.frame(
+        model_name = deparse(substitute(lmod)), 
+        n_predictors = ncol(lmod$model) - 1,
+        numdf = f[2],
+        fstat = f[1],
+        p.value = formatC(pf(f[1], f[2], f[3], lower.tail = F), format = "e", digits = 2),
+        adj.r.squared = lm_summary$adj.r.squared,
+        pre.r.squared = pred_r_squared(lmod)#,
+        #rmse = as.numeric(DMwR::regr.eval(lmod$model[1], fitted(lmod), stats = c("rmse")))
+        
+        )
+    return(df_summary)
+}
+
+lm_diagnotics <- function(lmod){
+  diag_df <- data.frame(
+    DW.test = car::durbinWatsonTest(lmod)$p,
+    NCV.test = formatC(car::ncvTest(lmod)$p, format = "e", digits = 2),
+    AD.test = formatC(nortest::ad.test(lmod$residuals)$p.value, format = "e", digits = 2),
+    VIF_gt_4 = sum(car::vif(lmod) > 4)
+  )
+  return(diag_df)
+}
+
+#evaluate performance & diagnostics
+kable(lm_results <- lm_evaluation(bkwd_elim_lmod), digits = 3, caption = "Model Summary Statistics")
+kable(lm_results_diagnostics <- lm_diagnotics(bkwd_elim_lmod), digits = 3, caption = "Model Diagnostic Statistics")
+
+```
+
+
+### BIC Selection
+
+Now let's use the original variables of the imputed data set with a BIC selection. Due to its high predictor penalty, this process removed 3 more variables than the backward elimination process, leaving the model with 6 statistically significant variables.
+
+
+```{r BIC_lmod}
+
+
+n <- nrow(all_vars_lmod$model)
+
+BIC_lmod <- step(all_vars_lmod, k = log(n), trace = 0)
+
+removed_variables <- function(larger_mod, smaller_mod){
+  #compares variables of 2 models
+  #returns the variables not in the small model
+  removed <- names(coef(larger_mod))[!names(coef(larger_mod)) %in%
+names(coef(smaller_mod))]
+    print(paste("removed variable(s):", length(removed)))
+    print(removed)
+}
+
+removed_variables(bkwd_elim_lmod, BIC_lmod)
+
+
+summary(BIC_lmod)
+
+summary(fitted(bkwd_elim_lmod))
+
+```
+
+The BIC model’s diagnostic plots closely resemble the plots from the backward elimination mode. While the Residuals-vs-Fitted plot displays what appears to be constant variance given the discrete response variable, the standardized-residual plot reveals some nonconstant variance along the fitted residuals. The Normal Q-Q plot shows that the standardized residuals are close to normality. The Leverage plot shows that we do not have any influential points.
+
+```{r plotlm2, fig.width = 10, fig.height = 10}
+par(mfrow=c(2,2))
+plot(BIC_lmod)
+
+```
+
+With only 6 variables, this more parsimonious model's predicted R-squared is nearly as good as the first 9-variable model. The model passes Durbin-Watson test of independence, but fails the nonconstant variance test and the Anderson-Darling test of normality.
+
+```{r}
+
+#evaluate performance & diagnostics
+model_eval <- lm_evaluation(BIC_lmod)
+model_diag <- lm_diagnotics(BIC_lmod) 
+kable(lm_results <- rbind(lm_results, model_eval), digits = 3, caption = "Model Summary Statistics")
+kable(lm_results_diagnostics <- rbind(lm_results_diagnostics, model_diag), digits = 3, caption = "Model Diagnostic Statistics")
+```
+
+## Poission Regression
+
+### Regular Poisson Model with BIC Selection
+
+Since the response variable is a count, this data set is a good candidate for generalized linear regression with the Poisson distribution. Let's use Poisson regression with the BIC variable selection process. This process removed 9 variables creating a model with 5 statistically significant features.
+
+```{r BIC_pois_mod}
+## Poission Regression
+### Regular Poisson Model with BIC Selection
+pois_mod <- glm(TARGET ~ ., family = "poisson", data = train_imputed)
+
+
+BIC_pois_mod <- step(pois_mod, k = log(n), trace = 0)
+
+removed_variables(pois_mod, BIC_pois_mod)
+
+summary(BIC_pois_mod)
+
+#exp(coef(BIC_pois_mod))
+
+```
+
+```{r BIC_pois_mod_perf}
+
+glm_performance <- function(model) {
+  ### Summarizes the model's key statistics
+  ### https://www.rdocumentation.org/packages/boot/versions/1.3-20/topics/cv.glm
+  #cost <- function(r, pi = 0) mean(abs(r - pi) > 0.5)
+  
+  df_summary <- data.frame(
+   # model = bk_elim_orig_vars
+    model_name = deparse(substitute(model)),
+    n_vars = length(coef(model)) - 1,
+    deviance_explained = with(model, 1 - deviance/null.deviance),
+    # page 87 of ELMR
+    pvalue = formatC(with(model, pchisq(null.deviance - deviance, df.null - df.residual, lower = F)), format = "e", digits = 2),
+    # https://stats.stackexchange.com/questions/141177/test-glm-model-using-null-and-model-deviances?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+    GoFtest = formatC(with(model, pchisq(deviance, df.residual, lower.tail=FALSE)), format = "e", digits = 2),
+    dispersion_parameter = sum(residuals(model,type="pearson")^2)/model$df.res,
+    # https://stats.idre.ucla.edu/r/dae/poisson-regression/
+    VIF_gt_4 = sum(car::vif(model) > 4),
+    CV_RMSE = sqrt(boot::cv.glm(model$model, model, K = 100)$delta[1])
+  )
+  return(df_summary)
+}
+#https://stackoverflow.com/questions/38272150/compute-cross-validation-for-glms-with-negative-binomial-response
+#https://stackoverflow.com/questions/20744224/k-fold-cross-validation-using-cv-lm?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+
+
+a <- sqrt(boot::cv.glm(BIC_pois_mod$model, BIC_pois_mod, K = 100)$delta[1])
+install_load("lmvar")
+b <- lmvar::cv.lm(BIC_lmod, k = 100) 
+a;b
+
+(glmod <- glm_performance(BIC_pois_mod))
+all_glmods <- glmod
+```
+
+### Quasi-Poisson Model with BIC Selection
+
+
+```{r quasi_pois}
+### Quasi-Poisson Model with BIC Selection
+quasi_pois_mod <- glm(BIC_pois_mod$formula, family = "quasipoisson", data = train_imputed)
+summary(quasi_pois_mod)
+```
+```{r quasi_pois_perf}
+glmod <- glm_performance(quasi_pois_mod)
+kable(all_glmods <- rbind(all_glmods, glmod), digits = 3)
+```
+
+
+```{r zi_pois}
+
+# zi_pois_all_vars <- pscl::zeroinfl(TARGET ~ ., data = train_imputed)
+# 
+# if (!exists("zi_pois_pois_mod")){
+#   zi_pois_pois_mod <- step(zi_pois_all_vars, k = log(n), trace = 0)
+# }
+# summary(zi_pois_pois_mod)
+#glm_performance(zi_pois_pois_mod)
+#data.frame(coef(zi_pois_pois_mod))
+#coef(zi_pois_all_vars)
+
+```
+
+
+
+## Negative Binomial Regression
+
+### BIC selection with Dispersion Parameter = 1
+
+```{r BIC_nb_k1_mod}
+## Negative Binomial Regression
+### BIC selection with Dispersion Parameter = 1
+nb1_mod_all_vars <- glm(TARGET ~ ., family = negative.binomial(1), data = train_imputed)
+
+
+BIC_nb_k1_mod <- step(nb1_mod_all_vars, k = log(n), trace = 0)
+summary(BIC_nb_k1_mod)
+```
+
+```{r BIC_nb_k1_mod_perf}
+
+glmod <- glm_performance(BIC_nb_k1_mod)
+kable(all_glmods <- rbind(all_glmods, glmod), digits = 3)
+
+```
+
+
+### BIC selection with Floating Dispersion Parameter
+
+```{r BIC_nb_mod}
+## BIC selection with Floating Dispersion Parameter
+nb_mod_all_vars <- MASS::glm.nb(TARGET ~ ., data = train_imputed)
+
+BIC_nb_mod <- step(nb_mod_all_vars, k = log(n), trace = 0)
+summary(BIC_nb_mod)
+```
+
+```{r BIC_nb_mod_perf}
+glmod <- glm_performance(BIC_nb_mod)
+kable(all_glmods <- rbind(all_glmods, glmod), digits = 3)
+```
+
+
+# SELECT MODELS
+
+## Best Model
+
+## Coefficient Comparison
+
+```{r compare_coefficients}
+
+options(knitr.kable.NA = '')
+#https://stats.stackexchange.com/questions/11096/how-to-interpret-coefficients-in-a-poisson-regression?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+compare_coefficients <- data.frame(var = rev(names(coef(all_vars_lmod))))
+all_models <- c(as.character(lm_results$model_name), as.character(all_glmods$model_name))
+
+for (i in 1:length(all_models)){
+  model <- get(all_models[i])
+  model_name <- all_models[i]
+  is_lm_obj <- rep(class(model)[1] == "lm", length(coef(model)))
+  df <- data.frame(var = as.character(names(coef(model))))
+  df[, model_name] <- ifelse(is_lm_obj, coef(model), exp(coef(model)))
+  compare_coefficients <- left_join(compare_coefficients, df)
+}
+ind <- apply(compare_coefficients[ , 2:7], 1, function(x) all(is.na(x)))
+#https://stackoverflow.com/questions/6471689/remove-rows-in-r-matrix-where-all-data-is-na?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+kable(compare_coefficients[!ind, ], digits = 4)
+
+```
+
